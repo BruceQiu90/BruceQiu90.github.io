@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next mist use-motion" lang="zh-Hans">
+<head><meta name="generator" content="Hexo 3.9.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#222">
+<script src="//cdn.bootcss.com/pace/1.0.2/pace.min.js"></script>
+<link href="//cdn.bootcss.com/pace/1.0.2/themes/pink/pace-theme-flash.css" rel="stylesheet">
+<style>
+    .pace .pace-progress {
+        background: #ff009e; /*进度条颜色*/
+        height: 3px;
+    }
+    .pace .pace-progress-inner {
+         box-shadow: 0 0 10px #ff009e, 0 0 5px #ff009e; /*阴影颜色*/
+    }
+    .pace .pace-activity {
+        border-top-color: #ff009e;    /*上边框颜色*/
+        border-left-color: #ff009e;    /*左边框颜色*/
+    }
+</style>
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform">
+<meta http-equiv="Cache-Control" content="no-siteapp">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    
+  
+  <link href="//cdn.jsdelivr.net/fancybox/2.1.5/jquery.fancybox.min.css" rel="stylesheet" type="text/css">
+
+
+
+
+
+
+
+  
+
+<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" type="text/css">
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="Spark,设计模式,">
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="布鲁斯IO" type="application/atom+xml">
+
+
+
+
+
+
+<meta name="description" content="我的日常工作就是开发 Spark Streaming 实时程序，计算指标，最后通过报表系统展现指标。由于目前公司处于发展阶段，实时程序的需求量不想大公司那样多，而且平台部人力有限，所以目前还是处于来一个实时任务开发一个指标的这么一个阶段。但是写多了实时程序后发现，Spark Streaming 的启动，初始化，解析 kafka 的中的 protobuf 数据。这些都是通用的代码，没有必要反复重复的">
+<meta name="keywords" content="Spark,设计模式">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Spark Streaming 通用模版类，避免重复代码">
+<meta property="og:url" content="http://yoursite.com/2019/07/13/Spark-Streaming-通用模版类，避免重复代码/index.html">
+<meta property="og:site_name" content="布鲁斯IO">
+<meta property="og:description" content="我的日常工作就是开发 Spark Streaming 实时程序，计算指标，最后通过报表系统展现指标。由于目前公司处于发展阶段，实时程序的需求量不想大公司那样多，而且平台部人力有限，所以目前还是处于来一个实时任务开发一个指标的这么一个阶段。但是写多了实时程序后发现，Spark Streaming 的启动，初始化，解析 kafka 的中的 protobuf 数据。这些都是通用的代码，没有必要反复重复的">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2019-07-13T07:28:06.872Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Spark Streaming 通用模版类，避免重复代码">
+<meta name="twitter:description" content="我的日常工作就是开发 Spark Streaming 实时程序，计算指标，最后通过报表系统展现指标。由于目前公司处于发展阶段，实时程序的需求量不想大公司那样多，而且平台部人力有限，所以目前还是处于来一个实时任务开发一个指标的这么一个阶段。但是写多了实时程序后发现，Spark Streaming 的启动，初始化，解析 kafka 的中的 protobuf 数据。这些都是通用的代码，没有必要反复重复的">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Mist',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://yoursite.com/2019/07/13/Spark-Streaming-通用模版类，避免重复代码/">
+
+
+
+
+
+  <title>Spark Streaming 通用模版类，避免重复代码 | 布鲁斯IO</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+    <a href="https://github.com/BruceQiu90"><img style="position: absolute; top: 0; left: 0; border: 0;" width="100" height="100" src="https://github.blog/wp-content/uploads/2008/12/forkme_left_white_ffffff.png?resize=149%2C149" class="attachment-full size-full" alt="Fork me on GitHub" data-recalc-dims="1"></a>
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">布鲁斯IO</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br>
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-about">
+          <a href="/about/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-user"></i> <br>
+            
+            关于
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br>
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br>
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br>
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/07/13/Spark-Streaming-通用模版类，避免重复代码/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content>
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">Spark Streaming 通用模版类，避免重复代码</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2019-07-13T15:06:29+08:00">
+                2019-07-13
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+            <div class="post-wordcount">
+              
+                
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">字数统计&#58;</span>
+                
+                <span title="字数统计">
+                  933 字
+                </span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">
+                  4 分钟
+                </span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p>我的日常工作就是开发 Spark Streaming 实时程序，计算指标，最后通过报表系统展现指标。由于目前公司处于发展阶段，实时程序的需求量不想大公司那样多，而且平台部人力有限，所以目前还是处于来一个实时任务开发一个指标的这么一个阶段。但是写多了实时程序后发现，Spark Streaming 的启动，初始化，解析 kafka 的中的 protobuf 数据。这些都是通用的代码，没有必要反复重复的复制粘贴。这篇文章就记录下利用抽象模版模式，简化 Spark Streaming 的开发过程，让程序员专注业务开发。</p>
+<a id="more"></a>
+
+<p>废话不多说，首先说下设计思路。利用设计模式中的抽象模版模式，定义一个抽象类，将 spark streaming 的初始化过程全部放到抽象类中，然后定一个 runjob 的抽象方法，这是一个钩子方法，由子类去实现。</p>
+<p>核心代码如下，代码基于 Spark 2.4 进行开发，kafka 版本为 2.1.1</p>
+<p>抽象模版类：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">AbstractStreamLauncher</span>(<span class="params">duration: <span class="type">Int</span>, topic: <span class="type">String</span>, groupId: <span class="type">String</span></span>)</span></span><br><span class="line"><span class="class">  <span class="keyword">extends</span> <span class="title">Launcher</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">runJob</span></span>(rdd: <span class="type">RDD</span>[<span class="type">Log</span>]): <span class="type">Unit</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">// 初始化</span></span><br><span class="line">  <span class="keyword">val</span> spark: <span class="type">SparkSession</span> = <span class="type">SparkSession</span></span><br><span class="line">    .builder()</span><br><span class="line">    .config(<span class="string">"spark.serializer"</span>, <span class="string">"org.apache.spark.serializer.KryoSerializer"</span>)</span><br><span class="line">    .appName(<span class="string">s"<span class="subst">$&#123;this.getClass.getSimpleName&#125;</span>"</span>)</span><br><span class="line">    .enableHiveSupport()</span><br><span class="line">    .getOrCreate()</span><br><span class="line"></span><br><span class="line">  <span class="keyword">val</span> ssc = <span class="keyword">new</span> <span class="type">StreamingContext</span>(spark.sparkContext, <span class="type">Minutes</span>(duration))</span><br><span class="line">  ssc.sparkContext.setLogLevel(<span class="string">"WARN"</span>)</span><br><span class="line">  <span class="keyword">val</span> config: <span class="type">Config</span> = <span class="type">ConfigFactory</span>.load()</span><br><span class="line">  <span class="keyword">val</span> topics: <span class="type">Set</span>[<span class="type">String</span>] = <span class="type">Set</span>(topic)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">val</span> kafkaParams = <span class="keyword">new</span> mutable.<span class="type">HashMap</span>[<span class="type">String</span>, <span class="type">Object</span>]()</span><br><span class="line">  <span class="comment">//Kafka服务监听端口</span></span><br><span class="line">  kafkaParams.put(<span class="string">"bootstrap.servers"</span>, config.getString(<span class="string">"kafka.broker.list"</span>))</span><br><span class="line">  <span class="comment">//指定kafka输出key的数据类型及编码格式</span></span><br><span class="line">  kafkaParams.put(<span class="string">"key.deserializer"</span>, classOf[<span class="type">StringDeserializer</span>])</span><br><span class="line">  <span class="comment">//指定kafka输出value的数据类型及编码格式</span></span><br><span class="line">  kafkaParams.put(<span class="string">"value.deserializer"</span>, classOf[<span class="type">ProtoBufDeserializer</span>])</span><br><span class="line">  <span class="comment">//消费者ID，随意指定</span></span><br><span class="line">  kafkaParams.put(<span class="string">"group.id"</span>, groupId)</span><br><span class="line">  <span class="comment">//指定从latest(最新,其他版本的是largest这里不行)还是smallest(最早)处开始读取数据</span></span><br><span class="line">  kafkaParams.put(<span class="string">"auto.offset.reset"</span>, <span class="string">"latest"</span>)</span><br><span class="line">  <span class="comment">//如果true,consumer定期地往zookeeper写入每个分区的offset</span></span><br><span class="line">  kafkaParams.put(<span class="string">"enable.auto.commit"</span>, <span class="literal">false</span>:java.lang.<span class="type">Boolean</span>)</span><br><span class="line"></span><br><span class="line">  <span class="comment">/* 自动确认offset的时间间隔  */</span></span><br><span class="line">  kafkaParams.put(<span class="string">"auto.commit.interval.ms"</span>, config.getString(<span class="string">"auto.commit.interval.ms"</span>))</span><br><span class="line">  kafkaParams.put(<span class="string">"session.timeout.ms"</span>, config.getString(<span class="string">"session.timeout.ms"</span>))</span><br><span class="line"></span><br><span class="line">  <span class="comment">//消息发送的最长等待时间.需大于session.timeout.ms这个时间</span></span><br><span class="line">  kafkaParams.put(<span class="string">"request.timeout.ms"</span>, config.getString(<span class="string">"request.timeout.ms"</span>))</span><br><span class="line">  <span class="comment">//一次从kafka中poll出来的数据条数</span></span><br><span class="line">  <span class="comment">//max.poll.records条数据需要在在session.timeout.ms这个时间内处理完</span></span><br><span class="line">  kafkaParams.put(<span class="string">"max.poll.records"</span>, config.getString(<span class="string">"max.poll.records"</span>))</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> kafkaStream = <span class="type">KafkaUtils</span>.createDirectStream(ssc,</span><br><span class="line">    <span class="type">LocationStrategies</span>.<span class="type">PreferConsistent</span>,</span><br><span class="line">    <span class="type">ConsumerStrategies</span>.<span class="type">Subscribe</span>[<span class="type">String</span>, <span class="type">InnoReport</span>.<span class="type">InnoReportLog</span>](topics, kafkaParams))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">execute</span></span>(): <span class="type">Unit</span> =&#123;</span><br><span class="line">    kafkaStream.foreachRDD(kafkaRDD =&gt; &#123;</span><br><span class="line">      <span class="keyword">val</span> offsetRanges = kafkaRDD.asInstanceOf[<span class="type">HasOffsetRanges</span>].offsetRanges</span><br><span class="line">      <span class="keyword">val</span> rdd: <span class="type">RDD</span>[<span class="type">InnoReport</span>.<span class="type">InnoReportLog</span>] = kafkaRDD.map(_.value())</span><br><span class="line">      <span class="keyword">val</span> value: <span class="type">RDD</span>[<span class="type">Log</span>] = extractLog(rdd)</span><br><span class="line">      runJob(value)</span><br><span class="line">      <span class="comment">// commit offset to kafka</span></span><br><span class="line">      kafkaStream.asInstanceOf[<span class="type">CanCommitOffsets</span>].commitAsync(offsetRanges)</span><br><span class="line">    &#125;)</span><br><span class="line">    ssc.start()</span><br><span class="line">    ssc.awaitTermination()</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">extractLog</span></span>(rdd: <span class="type">RDD</span>[<span class="type">InnoReport</span>.<span class="type">InnoReportLog</span>]): <span class="type">RDD</span>[<span class="type">Log</span>] = &#123;</span><br><span class="line">    rdd.map(log =&gt; &#123;</span><br><span class="line">      <span class="keyword">val</span> fields = mutable.<span class="type">Map</span>[<span class="type">String</span>, <span class="type">ValueType</span>]()</span><br><span class="line">      <span class="keyword">import</span> scala.collection.<span class="type">JavaConverters</span>._</span><br><span class="line">      <span class="keyword">val</span> mapList = log.getField.getMapList.asScala</span><br><span class="line">      <span class="keyword">if</span> (mapList != <span class="literal">null</span> &amp;&amp; mapList.nonEmpty) &#123;</span><br><span class="line">        mapList.foreach(m =&gt; &#123;</span><br><span class="line">          <span class="keyword">val</span> key = m.getKey</span><br><span class="line">          <span class="keyword">if</span> (m.getValue != <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">val</span> v = <span class="type">ValueType</span>(m.getValue.getIntType, m.getValue.getLongType, m.getValue.getFloatType, m.getValue.getStringType)</span><br><span class="line">            fields += (key -&gt; v)</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;)</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">val</span> thedate = <span class="type">DateUtils</span>.parseTimestampString(log.getTimestamp)</span><br><span class="line">      <span class="type">Log</span>(log.getIp, log.getTimestamp, fields.toMap, thedate)</span><br><span class="line">    &#125;)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面编写子类</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">RealTask</span>(<span class="params">duration: <span class="type">Int</span>, topic: <span class="type">String</span>, groupId: <span class="type">String</span></span>)</span></span><br><span class="line"><span class="class">  <span class="keyword">extends</span> <span class="title">AbstractStreamLauncher</span>(<span class="params">duration, topic, groupId</span>) </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">runJob</span></span>(rdd: <span class="type">RDD</span>[<span class="type">Log</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">import</span> spark.implicits._</span><br><span class="line">    <span class="keyword">val</span> df = rdd.toDF()</span><br><span class="line">    <span class="comment">// 进行业务逻辑处理</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">RealTask</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">new</span> <span class="type">RealTask</span>(args(<span class="number">0</span>).toInt, args(<span class="number">1</span>), args(<span class="number">2</span>)).execute()</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到子类很简单，只需要在 runjob 里写相应的业务逻辑即可。</p>
+<p>这样做的好处是：</p>
+<ul>
+<li>代码变的更简洁了，业务代码里只有业务相关的代码，没有繁琐的初始化和读取 kafka 的逻辑。</li>
+<li>便于新入职的同事尽快投入到开发中去，试想一下，一个新同事入职后，熟悉公司的环境也是需要一定时间的。</li>
+</ul>
+
+      
+    </div>
+    
+    
+    
+   <div>
+  
+    <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+
+  
+</div> 
+<div>
+      
+        
+
+      
+</div>
+    
+
+    
+
+    
+
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Spark/" rel="tag"><i class="fa fa-tag"></i> Spark</a>
+          
+            <a href="/tags/设计模式/" rel="tag"><i class="fa fa-tag"></i> 设计模式</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2019/07/13/Spark任务运行缓慢的问题排查/" rel="next" title="Spark任务运行缓慢的问题排查">
+                <i class="fa fa-chevron-left"></i> Spark任务运行缓慢的问题排查
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+
+      <section class="site-overview-wrap sidebar-panel sidebar-panel-active">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">Bruce Qiu</p>
+              <p class="site-description motion-element" itemprop="description">专注分享大数据、人工智能、微服务知识</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/BruceQiu90" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:qiuyanjun.90@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="https://stackoverflow.com/users/5800455/qiuyanjun" target="_blank" title="StackOverflow">
+                      
+                        <i class="fa fa-fw fa-stack-overflow"></i>StackOverflow</a>
+                  </span>
+                
+            </div>
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Bruce Qiu</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Mist</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/jquery/2.1.3/jquery.min.js"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/fastclick/1.0.6/fastclick.min.js"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/jquery.lazyload/1.9.3/jquery.lazyload.min.js"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/velocity/1.2.3/velocity.min.js"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/velocity/1.2.3/velocity.ui.min.js"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="//cdn.jsdelivr.net/fancybox/2.1.5/jquery.fancybox.pack.js"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
