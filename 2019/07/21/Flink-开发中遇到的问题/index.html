@@ -87,7 +87,7 @@
 
 
 
-  <meta name="keywords" content="Spark,">
+  <meta name="keywords" content="Flink,">
 
 
 
@@ -100,18 +100,18 @@
 
 
 
-<meta name="description" content="在目前的 Spark 编程中，大多数任务几乎都可以使用 dataframe，利用 sql 进行编程。大大加快了开发的效率。但是殊不知，如果 spark sql 没有用好的话，不但不会加快开发的效率，而且会使你的程序变慢。本文就记录一次我在开发 Spark 程序时遇到的问题。">
-<meta name="keywords" content="Spark">
+<meta name="description" content="在使用 flink 的 kafka producer 向 kafka 写数据时，我用的是 kafka 的新特性， excatly once。这时候读取 kafka 时总是报错误，错误详情是">
+<meta name="keywords" content="Flink">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Spark任务运行缓慢的问题排查">
-<meta property="og:url" content="http://yoursite.com/2019/07/13/Spark任务运行缓慢的问题排查/index.html">
+<meta property="og:title" content="Flink 开发中遇到的问题">
+<meta property="og:url" content="http://yoursite.com/2019/07/21/Flink-开发中遇到的问题/index.html">
 <meta property="og:site_name" content="布鲁斯IO">
-<meta property="og:description" content="在目前的 Spark 编程中，大多数任务几乎都可以使用 dataframe，利用 sql 进行编程。大大加快了开发的效率。但是殊不知，如果 spark sql 没有用好的话，不但不会加快开发的效率，而且会使你的程序变慢。本文就记录一次我在开发 Spark 程序时遇到的问题。">
+<meta property="og:description" content="在使用 flink 的 kafka producer 向 kafka 写数据时，我用的是 kafka 的新特性， excatly once。这时候读取 kafka 时总是报错误，错误详情是">
 <meta property="og:locale" content="zh-Hans">
-<meta property="og:updated_time" content="2019-07-13T07:05:41.113Z">
+<meta property="og:updated_time" content="2019-07-21T06:31:42.307Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Spark任务运行缓慢的问题排查">
-<meta name="twitter:description" content="在目前的 Spark 编程中，大多数任务几乎都可以使用 dataframe，利用 sql 进行编程。大大加快了开发的效率。但是殊不知，如果 spark sql 没有用好的话，不但不会加快开发的效率，而且会使你的程序变慢。本文就记录一次我在开发 Spark 程序时遇到的问题。">
+<meta name="twitter:title" content="Flink 开发中遇到的问题">
+<meta name="twitter:description" content="在使用 flink 的 kafka producer 向 kafka 写数据时，我用的是 kafka 的新特性， excatly once。这时候读取 kafka 时总是报错误，错误详情是">
 
 
 
@@ -141,13 +141,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2019/07/13/Spark任务运行缓慢的问题排查/">
+  <link rel="canonical" href="http://yoursite.com/2019/07/21/Flink-开发中遇到的问题/">
 
 
 
 
 
-  <title>Spark任务运行缓慢的问题排查 | 布鲁斯IO</title>
+  <title>Flink 开发中遇到的问题 | 布鲁斯IO</title>
   
 
 
@@ -283,7 +283,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/07/13/Spark任务运行缓慢的问题排查/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2019/07/21/Flink-开发中遇到的问题/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="Bruce Qiu">
@@ -300,7 +300,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">Spark任务运行缓慢的问题排查</h1>
+          <h1 class="post-title" itemprop="name headline">Flink 开发中遇到的问题</h1>
         
 
         <div class="post-meta">
@@ -312,8 +312,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2019-07-13T13:26:35+08:00">
-                2019-07-13
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2019-07-21T14:26:24+08:00">
+                2019-07-21
               </time>
             
 
@@ -344,7 +344,7 @@
                   <span class="post-meta-item-text">字数统计&#58;</span>
                 
                 <span title="字数统计">
-                  460 字
+                  781 字
                 </span>
               
 
@@ -360,7 +360,7 @@
                   <span class="post-meta-item-text">阅读时长 &asymp;</span>
                 
                 <span title="阅读时长">
-                  1 分钟
+                  4 分钟
                 </span>
               
             </div>
@@ -381,14 +381,24 @@
       
 
       
-        <p>在目前的 Spark 编程中，大多数任务几乎都可以使用 dataframe，利用 sql 进行编程。大大加快了开发的效率。但是殊不知，如果 spark sql 没有用好的话，不但不会加快开发的效率，而且会使你的程序变慢。本文就记录一次我在开发 Spark 程序时遇到的问题。</p>
+        <p>在使用 flink 的 kafka producer 向 kafka 写数据时，我用的是 kafka 的新特性， excatly once。这时候读取 kafka 时总是报错误，错误详情是 </p>
 <a id="more"></a>
 
-<p>我在 Spark 离线任务的一次开发过程中，需要从 Hive 中读取一个表的数据，进行 rdd 和 sql 的处理，然后写入到另一个 Hive 表中。程序写完后放到 azkaban 上进行调度，发现 web ui 上显示任务已经跑完了，但是程序始终没有退出，执行了一个小时后 spark 程序才真正退出。当时觉得很纳闷，代码已经在测试数据集上跑通了，验证结果没有问题，各种异常和脏数据已经提前过滤掉了，所以感觉上不是业务逻辑的问题。这时候观察最后一个 stage 的执行情况，发现在最后一个 stage，一共生成了有 3 万多个 task，然后在看下最后生成的 Hive 表对应的 HDFS 上的文件，发现目录下不断有文件写入，而且每个文件都非常小，连 1kb 都不到。这下找到原因了，原来是 job 花了大量的时间在写文件上。</p>
-<p>所以，我们在最后往 HDFS 上写文件，或者写 hive 表的时候，一定要把 partiton 的数量降下来，这样一来，既可以避免小文件过多的问题，又可以加快 job 执行的时间。</p>
-<p>核心代码：</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">df.repartition(<span class="number">1</span>).createOrReplaceTempView(<span class="string">"complete_rate"</span>)</span><br><span class="line"><span class="comment">// partition 数量需要根据最后输出的大小进行调整</span></span><br><span class="line"></span><br><span class="line">      spark.sql(</span><br><span class="line">        <span class="string">s""</span><span class="string">"</span></span><br><span class="line"><span class="string">           | insert into rpt_innoreport_realtime.index3</span></span><br><span class="line"><span class="string">           | select deviceId, eventNo, taskId, channel, thedate from complete_rate</span></span><br><span class="line"><span class="string">         "</span><span class="string">""</span>.stripMargin)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">org.apache.kafka.common.KafkaException: Cannot perform send because at least one previous transactional or idempotent request has failed with errors. </span><br><span class="line"></span><br><span class="line">at org.apache.kafka.clients.producer.internals.TransactionManager.failIfNotReadyForSend(TransactionManager.java:279) </span><br><span class="line"></span><br><span class="line">at org.apache.kafka.clients.producer.internals.TransactionManager.maybeAddPartitionToTransaction(TransactionManager.java:264) </span><br><span class="line"></span><br><span class="line">at org.apache.kafka.clients.producer.KafkaProducer.doSend(KafkaProducer.java:862) </span><br><span class="line"></span><br><span class="line">at org.apache.kafka.clients.producer.KafkaProducer.send(KafkaProducer.java:803) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.internal.FlinkKafkaInternalProducer.send(FlinkKafkaInternalProducer.java:105) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer.invoke(FlinkKafkaProducer.java:651) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer.invoke(FlinkKafkaProducer.java:98) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.functions.sink.TwoPhaseCommitSinkFunction.invoke(TwoPhaseCommitSinkFunction.java:228) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamSink.processElement(StreamSink.java:56) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.pushToOperator(OperatorChain.java:579) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:554) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:534) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.AbstractStreamOperator$CountingOutput.collect(AbstractStreamOperator.java:718) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.AbstractStreamOperator$CountingOutput.collect(AbstractStreamOperator.java:696) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamMap.processElement(StreamMap.java:41) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.pushToOperator(OperatorChain.java:579) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:554) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.OperatorChain$CopyingChainingOutput.collect(OperatorChain.java:534) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.AbstractStreamOperator$CountingOutput.collect(AbstractStreamOperator.java:718) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.AbstractStreamOperator$CountingOutput.collect(AbstractStreamOperator.java:696) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamSourceContexts$NonTimestampContext.collect(StreamSourceContexts.java:104) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamSourceContexts$NonTimestampContext.collectWithTimestamp(StreamSourceContexts.java:111) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.internals.AbstractFetcher.emitRecordWithTimestamp(AbstractFetcher.java:398) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.internal.KafkaFetcher.emitRecord(KafkaFetcher.java:185) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.internal.KafkaFetcher.runFetchLoop(KafkaFetcher.java:150) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumerBase.run(FlinkKafkaConsumerBase.java:712) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamSource.run(StreamSource.java:93) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.api.operators.StreamSource.run(StreamSource.java:57) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.SourceStreamTask.run(SourceStreamTask.java:97) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.streaming.runtime.tasks.StreamTask.invoke(StreamTask.java:300) </span><br><span class="line"></span><br><span class="line">at org.apache.flink.runtime.taskmanager.Task.run(Task.java:711) </span><br><span class="line"></span><br><span class="line">at java.lang.Thread.run(Thread.java:748) </span><br><span class="line"></span><br><span class="line">Caused by: org.apache.kafka.common.errors.ProducerFencedException: Producer attempted an operation with an old epoch. Either there is a newer producer with the same transactionalId, or the producer&apos;s transaction has been expired by the broker.</span><br></pre></td></tr></table></figure>
 
+<p>这是查阅官方文档和资料，发现代码中需要增加关于 exactly-once 相关的配置 </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"transaction.timeout.ms"</span>, <span class="string">"3000"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="type">ProducerConfig</span>.<span class="type">ENABLE_IDEMPOTENCE_CONFIG</span>, <span class="string">"true"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"max.in.flight.requests.per.connection"</span>, <span class="string">"1"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"retries"</span>, <span class="string">"5"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"acks"</span>, <span class="string">"all"</span>)</span><br></pre></td></tr></table></figure>
+
+<p>但是这时候还是出现上面的问题，这时候在 stackoverflow 上发现，把 transaction.timeout.ms 这个参数设置的比 checkpoint 的时间要大，就没有问题了 </p>
+<p>下面附上正确的生产者参数 </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">val</span> producerProps = <span class="keyword">new</span> <span class="type">Properties</span>() </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"bootstrap.servers"</span>,config.getString(<span class="string">"kafka.producer.servers"</span>)) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"transaction.timeout.ms"</span>,<span class="string">"420000"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="type">ProducerConfig</span>.<span class="type">ENABLE_IDEMPOTENCE_CONFIG</span>,<span class="string">"true"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"max.in.flight.requests.per.connection"</span>, <span class="string">"1"</span>) </span><br><span class="line"></span><br><span class="line">producerProps.setProperty(<span class="string">"retries"</span>, <span class="string">"5"</span>)producerProps.setProperty(<span class="string">"acks"</span>, <span class="string">"all"</span>)</span><br></pre></td></tr></table></figure>
+
+<p>参数解释： </p>
+<p>transaction.timeout.ms ： 等待事务状态变更的最长时间 </p>
+<p>ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG 参数名为：enable.idempotence，excatly-once 的时候必须设置 </p>
+<p>max.in.flight.requests.per.connection： 必须设置小于 5。 </p>
+<p>客户端在阻止之前将在单个连接上发送的最大未确认请求数。请注意，如果此设置设置为大于1并且发送失败，则存在由于重试而导致消息重新排序的风险（即，如果启用了重试）。 </p>
+<p>retries：必须设置大于0  </p>
 
       
     </div>
@@ -422,7 +432,7 @@
       
         <div class="post-tags">
           
-            <a href="/tags/Spark/" rel="tag"><i class="fa fa-tag"></i> Spark</a>
+            <a href="/tags/Flink/" rel="tag"><i class="fa fa-tag"></i> Flink</a>
           
         </div>
       
@@ -435,8 +445,8 @@
         <div class="post-nav">
           <div class="post-nav-next post-nav-item">
             
-              <a href="/2019/07/01/Spark多线程并发执行任务/" rel="next" title="Spark多线程并发执行任务">
-                <i class="fa fa-chevron-left"></i> Spark多线程并发执行任务
+              <a href="/2019/07/13/Spark-Streaming-通用模版类，避免重复代码/" rel="next" title="Spark Streaming 通用模版类，避免重复代码">
+                <i class="fa fa-chevron-left"></i> Spark Streaming 通用模版类，避免重复代码
               </a>
             
           </div>
@@ -444,10 +454,6 @@
           <span class="post-nav-divider"></span>
 
           <div class="post-nav-prev post-nav-item">
-            
-              <a href="/2019/07/13/Spark-Streaming-通用模版类，避免重复代码/" rel="prev" title="Spark Streaming 通用模版类，避免重复代码">
-                Spark Streaming 通用模版类，避免重复代码 <i class="fa fa-chevron-right"></i>
-              </a>
             
           </div>
         </div>
