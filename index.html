@@ -161,6 +161,241 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2020/09/13/SparkContext-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90-%E2%80%94-%E5%88%9B%E5%BB%BA-SparkEnv/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/09/13/SparkContext-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90-%E2%80%94-%E5%88%9B%E5%BB%BA-SparkEnv/" class="post-title-link" itemprop="url">SparkContext 启动流程分析 — 创建 SparkEnv</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-09-13 09:40:33" itemprop="dateCreated datePublished" datetime="2020-09-13T09:40:33+08:00">2020-09-13</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-09-19 14:59:41" itemprop="dateModified" datetime="2020-09-19T14:59:41+08:00">2020-09-19</time>
+              </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.3k</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h2 id="SparkEnv-的创建"><a href="#SparkEnv-的创建" class="headerlink" title="SparkEnv 的创建"></a>SparkEnv 的创建</h2><p>SparkEnv 是 Spark 的执行环境对象，其中包括众多与 Executor 执行相关的对象。由于在 local 模式下 Driver 会创建Executor，local-cluster 部署模式或者 Standalone 部署模式下 Worker 另起的 CoarseGrainedExecutorBackend 进程中也会创建 Executor，所以 SparkEnv 存在于 Driver 或者 CoarseGrainedExecutorBackend 进程中。在 SparkContext 中创建 SparkEnv 主要使用SparkEnv 的 createDriverEnv，SparkEnv.createDriverEnv 方法有三个参数：conf、isLocal和listenerBus。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">isLocal</span></span>: <span class="type">Boolean</span> = <span class="type">Utils</span>.isLocalMaster(_conf)</span><br><span class="line"></span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line"><span class="comment">// An asynchronous listener bus for Spark events</span></span><br><span class="line"><span class="keyword">private</span>[spark] <span class="function"><span class="keyword">def</span> <span class="title">listenerBus</span></span>: <span class="type">LiveListenerBus</span> = _listenerBus</span><br><span class="line"></span><br><span class="line"><span class="comment">// This function allows components created by SparkEnv to be mocked in unit tests:</span></span><br><span class="line"><span class="keyword">private</span>[spark] <span class="function"><span class="keyword">def</span> <span class="title">createSparkEnv</span></span>(</span><br><span class="line">  conf: <span class="type">SparkConf</span>,</span><br><span class="line">  isLocal: <span class="type">Boolean</span>,</span><br><span class="line">  listenerBus: <span class="type">LiveListenerBus</span>): <span class="type">SparkEnv</span> = &#123;</span><br><span class="line">  <span class="type">SparkEnv</span>.createDriverEnv(conf, isLocal, listenerBus, <span class="type">SparkContext</span>.numDriverCores(master, conf))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中 _conf 是对 SparkConf 的复制，isLocal 标识是否是单机模式，listenerBus 采用监听器模式维护各类事件的处理。<br>SparkEnv的方法createDriverEnv最终调用 create 创建 SparkEnv。在 SparkEnv 创建的过程中，会执行以下几步：</p>
+<ol>
+<li>创建安全管理器 SecurityManager</li>
+<li>创建基于 Netty 的 RPC 通信工厂 RpcEnv</li>
+<li>创建广播管理器 BroadcastManager</li>
+<li>创建序列化管理器 SerializerManager</li>
+<li>创建 Map 任务输出跟踪器 MapOutputTracker</li>
+<li>实例化 ShuffleManager</li>
+<li>创建 MemoryManager</li>
+<li>创建块传输服务 BlockTransferService</li>
+<li>创建 BlockManagerMaster</li>
+<li>创建块管理器 BlockManager</li>
+<li>创建测量系统 MetricsSystem</li>
+<li>创建 SparkEnv</li>
+</ol>
+<p>下面我们来看看上面 SparkEnv 中的具体细节。</p>
+<h2 id="安全管理器-SecurityManager"><a href="#安全管理器-SecurityManager" class="headerlink" title="安全管理器 SecurityManager"></a>安全管理器 SecurityManager</h2><p>做权限管理，安全验证方面的事情。</p>
+<h2 id="RpcEnv"><a href="#RpcEnv" class="headerlink" title="RpcEnv"></a>RpcEnv</h2><p>负责 Driver 和 Executor 之间通信的。</p>
+<h2 id="广播管理器-BroadcastManager"><a href="#广播管理器-BroadcastManager" class="headerlink" title="广播管理器 BroadcastManager"></a>广播管理器 BroadcastManager</h2><p>BroadcastManager 在 Spark 的配置信息保存在本地，同时为了容灾还会复制到其他节点上。值得注意的是 BroadcastManager 必须在其 initialize() 初始化方法执行完成后才能生效。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Called by SparkContext or Executor before using Broadcast</span></span><br><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">initialize</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">  synchronized &#123;</span><br><span class="line">    <span class="keyword">if</span> (!initialized) &#123;</span><br><span class="line">      broadcastFactory = <span class="keyword">new</span> <span class="type">TorrentBroadcastFactory</span></span><br><span class="line">      broadcastFactory.initialize(isDriver, conf, securityManager)</span><br><span class="line">      initialized = <span class="literal">true</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里我们看到在 initialize 方法内部创建了一个 TorrentBroadcastFactory, 在 TorrentBroadcastFactory 中使用代理模式将调用的方法转交给 TorrentBroadcast 进行处理。</p>
+<h2 id="序列化管理器-SerializerManager"><a href="#序列化管理器-SerializerManager" class="headerlink" title="序列化管理器 SerializerManager"></a>序列化管理器 SerializerManager</h2><p>用于在进行 shuffle 的过程中将数据进行序列化之后进行网络之间的传输的。Spark 的序列化有两种方式，分别是：JavaSerializer 和 KryoSerializer。Spark 默认是采用的 Java 序列化的方式，可以通过设置参数 –conf spark.serializer=org.apache.spark.serializer.KryoSerializer 启用 Kryo 序列化方式。</p>
+<h2 id="创建-Map-任务输出跟踪器-MapOutputTracker"><a href="#创建-Map-任务输出跟踪器-MapOutputTracker" class="headerlink" title="创建 Map 任务输出跟踪器 MapOutputTracker"></a>创建 Map 任务输出跟踪器 MapOutputTracker</h2><p>mapOutputTracker 用于跟踪 map 阶段任务的输出状态，此状态便于 reduce 阶段任务获取地址及中间输出结果。每个map 任务或者 reduce 任务都会有其唯一标识，分别为 mapId 和 reduceId。每个 reduce 任务的输入可能是多个 map 任务的输出，reduce 会到各个 map 任务的所在节点上拉取 Block，这一过程叫做 shuffle。每批 shuffle 过程都有唯一的标识shuffleId。</p>
+<p>Driver和Executor处理MapOutputTracker的方式有所不同。</p>
+<ul>
+<li><p>如果当前应用程序是Driver，则创建MapOutputTrackerMaster，然后创建MapOutputTrackerMasterEndpoint，并且注册到RpcEnv中。</p>
+</li>
+<li><p>如果当前应用程序是Executor，则创建MapOutputTrackerWorker，并从RpcEnv中找到MapOutputTrackerMasterEndpoint的引用。</p>
+</li>
+</ul>
+<h2 id="实例化-ShuffleManager"><a href="#实例化-ShuffleManager" class="headerlink" title="实例化 ShuffleManager"></a>实例化 ShuffleManager</h2><p>ShuffleManager 负责管理本地及远程的 block 数据的 shuffle 操作。ShuffleManager 默认为通过反射方式生成的SortShuffleManager 实例。Spark作为并行计算框架，同一个作业会被划分为多个任务在多个节点上并行执行，reduce的输入可能存在于多个节点上，因此需要通过“洗牌”将所有reduce的输入汇总起来，这个过程就是shuffle。</p>
+<p>ShuffleManager 创建的代码如下：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Let the user specify short names for shuffle managers</span></span><br><span class="line"><span class="keyword">val</span> shortShuffleMgrNames = <span class="type">Map</span>(</span><br><span class="line">  <span class="string">"sort"</span> -&gt; classOf[org.apache.spark.shuffle.sort.<span class="type">SortShuffleManager</span>].getName,</span><br><span class="line">  <span class="string">"tungsten-sort"</span> -&gt; classOf[org.apache.spark.shuffle.sort.<span class="type">SortShuffleManager</span>].getName)</span><br><span class="line"><span class="keyword">val</span> shuffleMgrName = conf.get(config.<span class="type">SHUFFLE_MANAGER</span>)</span><br><span class="line"><span class="keyword">val</span> shuffleMgrClass =</span><br><span class="line">shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase(<span class="type">Locale</span>.<span class="type">ROOT</span>), shuffleMgrName)</span><br><span class="line"><span class="keyword">val</span> shuffleManager = instantiateClass[<span class="type">ShuffleManager</span>](shuffleMgrClass)</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="内存管理器MemoryManager"><a href="#内存管理器MemoryManager" class="headerlink" title="内存管理器MemoryManager"></a>内存管理器MemoryManager</h2><p>用于管理最大 Execution 内存和最大 Storage 内存，在 Spark 3.0 中就只有 UnifiedMemoryManager 这一种内存管理器的实现了，之前的静态内存管理器 StaticMemoryManager 已经不见了。我们可以通过 spark.executor.memory、spark.shuffle.memoryFraction、spark.shuffle.safetyFraction 配置属性控制内存。</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2020/09/06/SparkContext-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E8%A7%A3%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2020/09/06/SparkContext-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E8%A7%A3%E6%9E%90/" class="post-title-link" itemprop="url">SparkContext 启动流程解析</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-09-06 13:33:39" itemprop="dateCreated datePublished" datetime="2020-09-06T13:33:39+08:00">2020-09-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-09-13 09:52:00" itemprop="dateModified" datetime="2020-09-13T09:52:00+08:00">2020-09-13</time>
+              </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>2.9k</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>上一节我们讲了 spark-submit 的启动流程，这一节我们在来讲讲 Spark 的核心 SparkContext。 我们在写 Spark 应用程序的时候，都会有这么一行代码：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder().enableHiveSupport().getOrCreate()</span><br></pre></td></tr></table></figure>
+
+<p>这一行代码中就创建了 SparkContext。本文将带着大家看看 SparkContext 的创建过程。</p>
+<h1 id="认识-SparkContext"><a href="#认识-SparkContext" class="headerlink" title="认识 SparkContext"></a>认识 SparkContext</h1><p>首先我们先来认识下什么是 SparkContext，它对我们编写的 Spark 程序的运行起到了什么结果。首先我们先看一下 SparkContext 的源码的注视部分。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Main entry point for Spark functionality. A SparkContext represents the connection to a Spark</span></span><br><span class="line"><span class="comment"> * cluster, and can be used to create RDDs, accumulators and broadcast variables on that cluster.</span></span><br><span class="line"><span class="comment"> *</span></span><br><span class="line"><span class="comment"> * @note Only one `SparkContext` should be active per JVM. You must `stop()` the</span></span><br><span class="line"><span class="comment"> *   active `SparkContext` before creating a new one.</span></span><br><span class="line"><span class="comment"> * @param config a Spark Config object describing the application configuration. Any settings in</span></span><br><span class="line"><span class="comment"> *   this config overrides the default configs as well as system properties.</span></span><br><span class="line"><span class="comment"> */</span></span><br></pre></td></tr></table></figure>
+
+<p>注视里写了 SparkContext 是 Spark 程序的入口，是客户端用来连接 Spark 集群的桥梁。使用 SparkContext 可以创建 RDD，累加器和广播变量。这里我们可以看出 SparkContext 对我们来说是十分重要的。</p>
+<h1 id="SparkContext-初始化过程"><a href="#SparkContext-初始化过程" class="headerlink" title="SparkContext 初始化过程"></a>SparkContext 初始化过程</h1><p>首先我们看一下 SparkSession 的 getOrCreate 方法。在这个方法里创建了 SparkContext。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">getOrCreate</span></span>(): <span class="type">SparkSession</span> = synchronized &#123;</span><br><span class="line">  		<span class="comment">// SparkSession只能在Driver端创建和访问 </span></span><br><span class="line">      assertOnDriver()</span><br><span class="line">      <span class="comment">// 首先检查是否存在有效的线程本地SparkSession</span></span><br><span class="line">      <span class="keyword">var</span> session = activeThreadSession.get()</span><br><span class="line">  		<span class="comment">// 如果session不为空,且session对应的sparkContext未停止了,返回现有session</span></span><br><span class="line">      <span class="keyword">if</span> ((session ne <span class="literal">null</span>) &amp;&amp; !session.sparkContext.isStopped) &#123;</span><br><span class="line">        applyModifiableSettings(session)</span><br><span class="line">        <span class="keyword">return</span> session</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="comment">// 再检查是否存在有效的全局的默认SparkSession</span></span><br><span class="line">      <span class="type">SparkSession</span>.synchronized &#123;</span><br><span class="line">        <span class="comment">// If the current thread does not have an active session, get it from the global session.</span></span><br><span class="line">        session = defaultSession.get()</span><br><span class="line">        <span class="keyword">if</span> ((session ne <span class="literal">null</span>) &amp;&amp; !session.sparkContext.isStopped) &#123;</span><br><span class="line">          applyModifiableSettings(session)</span><br><span class="line">          <span class="keyword">return</span> session</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 没有活跃的 SparkSession, 创建一个新的 Session</span></span><br><span class="line">        <span class="keyword">val</span> sparkContext = userSuppliedContext.getOrElse &#123;</span><br><span class="line">          <span class="keyword">val</span> sparkConf = <span class="keyword">new</span> <span class="type">SparkConf</span>()</span><br><span class="line">          options.foreach &#123; <span class="keyword">case</span> (k, v) =&gt; sparkConf.set(k, v) &#125;</span><br><span class="line"></span><br><span class="line">          <span class="comment">// set a random app name if not given.</span></span><br><span class="line">          <span class="keyword">if</span> (!sparkConf.contains(<span class="string">"spark.app.name"</span>)) &#123;</span><br><span class="line">            sparkConf.setAppName(java.util.<span class="type">UUID</span>.randomUUID().toString)</span><br><span class="line">          &#125;</span><br><span class="line">					<span class="comment">// 这里创建了 SparkContext</span></span><br><span class="line">          <span class="type">SparkContext</span>.getOrCreate(sparkConf)</span><br><span class="line">          <span class="comment">// Do not update `SparkConf` for existing `SparkContext`, as it's shared by all sessions.</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        applyExtensions(</span><br><span class="line">          sparkContext.getConf.get(<span class="type">StaticSQLConf</span>.<span class="type">SPARK_SESSION_EXTENSIONS</span>).getOrElse(<span class="type">Seq</span>.empty),</span><br><span class="line">          extensions)</span><br><span class="line">				<span class="comment">// 将 SparkContext 放入 SparkSession 中</span></span><br><span class="line">        session = <span class="keyword">new</span> <span class="type">SparkSession</span>(sparkContext, <span class="type">None</span>, <span class="type">None</span>, extensions)</span><br><span class="line">        options.foreach &#123; <span class="keyword">case</span> (k, v) =&gt; session.initialSessionOptions.put(k, v) &#125;</span><br><span class="line">        setDefaultSession(session)</span><br><span class="line">        setActiveSession(session)</span><br><span class="line">        registerContextListener(sparkContext)</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">return</span> session</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>我们先来看下 SparkContext 的初始化具体做了哪些事情，下面我们对几个核心模块进行重点讲解。</p>
+<ol>
+<li><p>创建Spark执行环境SparkEnv</p>
+<p>详细内容请看：<a href="_blank">SparkContext 初始化 — 创建SparkEnv</a></p>
+</li>
+<li><p>创建并初始化Spark UI</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>Hadoop相关配置及Executor环境变量的设置</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>创建任务调度TaskScheduler</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>创建和启动DAGScheduler</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>TaskScheduler的启动</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>初始化管理器BlockManager（BlockManager是存储体系的主要组件之一）<br>详细内容请看：</p>
+</li>
+<li><p>启动测量系统MetricsSystem</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>创建和启动Executor分配管理器ExecutorAllocationManager</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>ContextCleaner的创建与启动</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>Spark环境更新</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>创建DAGSchedulerSource和BlockManagerSource</p>
+<p>详细内容请看：</p>
+</li>
+<li><p>将SparkContext标记为激活</p>
+<p>详细内容请看：</p>
+</li>
+</ol>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2020/09/05/spark-submit-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -423,7 +658,7 @@
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-06-21 09:39:03" itemprop="dateModified" datetime="2020-06-21T09:39:03+08:00">2020-06-21</time>
+                <time title="修改时间：2020-10-14 21:52:11" itemprop="dateModified" datetime="2020-10-14T21:52:11+08:00">2020-10-14</time>
               </span>
 
           <br>
@@ -432,7 +667,7 @@
                 <i class="far fa-file-word"></i>
               </span>
                 <span class="post-meta-item-text">本文字数：</span>
-              <span>6.8k</span>
+              <span>7.5k</span>
             </span>
 
         </div>
@@ -612,14 +847,14 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-tags">
             <a href="/tags/">
           
-        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-count">4</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -667,7 +902,7 @@
       <i class="fa fa-chart-area"></i>
     </span>
       <span class="post-meta-item-text">站点总字数：</span>
-    <span title="站点总字数">34k</span>
+    <span title="站点总字数">41k</span>
 </div>
 <span id="busuanzi_container_site_uv">
   本站访问次数：<span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
