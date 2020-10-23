@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"bruceqiu90.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="最近在学习 Java 的多线程 volatile 关键字的时候，知道了有缓存一致性这么一个概念，还了解到在 CPU 层面也存在一个高速缓存，CPU 首先要处理数据时，会先去 CPU 的高速缓存内找，如果没找到再回去主内存中找，数据在高速缓存的执行周期比主内存的执行周期存在着较大的差异。 如果需要的程序是在CPU寄存器中的，指令执行时1个周期内就能访问到他们。如果在CPU Cache中，需要130个">
+<meta property="og:type" content="article">
+<meta property="og:title" content="彻底理解CPU Cache和缓存行">
+<meta property="og:url" content="https://bruceqiu90.github.io/2020/10/20/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/index.html">
+<meta property="og:site_name" content="布鲁斯IO">
+<meta property="og:description" content="最近在学习 Java 的多线程 volatile 关键字的时候，知道了有缓存一致性这么一个概念，还了解到在 CPU 层面也存在一个高速缓存，CPU 首先要处理数据时，会先去 CPU 的高速缓存内找，如果没找到再回去主内存中找，数据在高速缓存的执行周期比主内存的执行周期存在着较大的差异。 如果需要的程序是在CPU寄存器中的，指令执行时1个周期内就能访问到他们。如果在CPU Cache中，需要130个">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://bruceqiu90.github.io/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/cpu.png">
+<meta property="article:published_time" content="2020-10-20T12:42:34.000Z">
+<meta property="article:modified_time" content="2020-10-23T14:33:43.549Z">
+<meta property="article:author" content="Bruce Qiu">
+<meta property="article:tag" content="Java">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://bruceqiu90.github.io/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/cpu.png">
+
+<link rel="canonical" href="https://bruceqiu90.github.io/2020/10/20/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>彻底理解CPU Cache和缓存行 | 布鲁斯IO</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+	<a href="https://your-url" target="_blank" rel="noopener" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#70B7FD; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">布鲁斯IO</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2020/10/20/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          彻底理解CPU Cache和缓存行
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-10-20 20:42:34" itemprop="dateCreated datePublished" datetime="2020-10-20T20:42:34+08:00">2020-10-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-10-23 22:33:43" itemprop="dateModified" datetime="2020-10-23T22:33:43+08:00">2020-10-23</time>
+              </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span><br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>6k</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>最近在学习 Java 的多线程 volatile 关键字的时候，知道了有缓存一致性这么一个概念，还了解到在 CPU 层面也存在一个高速缓存，CPU 首先要处理数据时，会先去 CPU 的高速缓存内找，如果没找到再回去主内存中找，数据在高速缓存的执行周期比主内存的执行周期存在着较大的差异。</p>
+<p>如果需要的程序是在CPU寄存器中的，指令执行时1个周期内就能访问到他们。如果在CPU Cache中，需要1<del>30个周期；如果在主存中，需要50</del>200个周期；在磁盘上，大概需要几千万个周期。充分利用它的结构和机制，可以有效的提高程序的性能。</p>
+<p>可见作为程序员，需要理解计算机存储器层次结构，它对应用程序的性能有巨大的影响。</p>
+<h1 id="认识-CPU-Cache"><a href="#认识-CPU-Cache" class="headerlink" title="认识 CPU Cache"></a>认识 CPU Cache</h1><p>为了弥补 CPU 访问内存慢的情况，充分发挥 CPU 的计算资源，提高CPU整体吞吐量，在CPU与内存之间引入了一级Cache。随着热点数据体积越来越大，一级Cache L1已经不满足发展的要求，引入了二级Cache L2，三级Cache L3。CPU Cache在存储器层次结构中的示意如下图：</p>
+<p><img src="/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/cpu.png" alt></p>
+<p>结合这张 CPU 缓存架构图，我们看一组 CPU 各级缓存存取速度的对比</p>
+<ol>
+<li>各种寄存器，用来存储本地变量和函数参数，访问一次需要 1cycle，耗时小于 1ns；</li>
+<li>L1 Cache，一级缓存，本地 core 的缓存，分成 32K 的数据缓存 L1d 和 32k 指令缓存 L1i，访问 L1 需要 3cycles，耗时大约 1ns；</li>
+<li>L2 Cache，二级缓存，本地 core 的缓存，被设计为 L1 缓存与共享的 L3 缓存之间的缓冲，大小为 256K，访问 L2 需要 12cycles，耗时大约 3ns；</li>
+<li>L3 Cache，三级缓存，在同插槽的所有 core 共享 L3 缓存，分为多个 2M 的段，访问 L3 需要 38cycles，耗时大约 12ns；</li>
+</ol>
+<p>大致可以得出结论，缓存层级越接近于 CPU core，容量越小，速度越快。</p>
+<h1 id="什么是缓存行"><a href="#什么是缓存行" class="headerlink" title="什么是缓存行"></a>什么是缓存行</h1><p>首先我们来看一下下面的代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Main</span> </span>&#123;</span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">long</span>[][] arr;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        arr = <span class="keyword">new</span> <span class="keyword">long</span>[<span class="number">1024</span> * <span class="number">1024</span>][<span class="number">8</span>];</span><br><span class="line">        <span class="comment">// 横向遍历</span></span><br><span class="line">        <span class="keyword">long</span> marked = System.currentTimeMillis();</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">1024</span> * <span class="number">1024</span>; i += <span class="number">1</span>) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; <span class="number">8</span>; j++) &#123;</span><br><span class="line">                sum += arr[i][j];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="string">"Loop times:"</span> + (System.currentTimeMillis() - marked)+ <span class="string">"ms"</span>);</span><br><span class="line"></span><br><span class="line">        marked = System.currentTimeMillis();</span><br><span class="line">        <span class="comment">// 纵向遍历</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">8</span>; i += <span class="number">1</span>) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; <span class="number">1024</span> * <span class="number">1024</span>; j++) &#123;</span><br><span class="line">                sum += arr[j][i];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="string">"Loop times:"</span> + (System.currentTimeMillis() - marked)+ <span class="string">"ms"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如上述代码所示，定义了一个二维数组 <code>long[][] arr</code> 并且使用了横向遍历和纵向遍历两种顺序对这个二位数组进行遍历，遍历总次数相同，只不过循环的方向不同，我们来看看他们两个循环分别用了多少时间：</p>
+<blockquote>
+</blockquote>
+<p>同样的数据，遍历总次数相同，只是循环的方式不同，为什么会出现那么大的差异？要想了解这个问题，必须先知道什么是 CPU 的缓存行。缓存行 (Cache Line) 便是 CPU Cache 中的最小单位，CPU Cache 由若干缓存行组成，一个缓存行的大小通常是 64 字节（这取决于 CPU），并且它有效地引用主内存中的一块地址。一个 Java 的 long 类型是 8 字节，因此在一个缓存行中可以存 8 个 long 类型的变量。</p>
+<p>试想一下你正在遍历一个长度为 16 的 long 数组 data[16]，原始数据自然存在于主内存中，访问过程描述如下</p>
+<ol>
+<li>访问 data[0]，CPU core 尝试访问 CPU Cache，未命中。</li>
+<li>尝试访问主内存，操作系统一次访问的单位是一个 Cache Line 的大小 — 64 字节，这意味着：既从主内存中获取到了 data[0] 的值，同时将 data[0] ~ data[7] 加入到了 CPU Cache 之中，for free~</li>
+<li>访问 data[1]~data[7]，CPU core 尝试访问 CPU Cache，命中直接返回。</li>
+<li>访问 data[8]，CPU core 尝试访问 CPU Cache，未命中。</li>
+<li>尝试访问主内存。重复步骤 2</li>
+</ol>
+<p>再回到文章的开头，为何横向遍历 <code>arr = new long[1024 * 1024][8]</code> 要比纵向遍历更快？大家现在应该知道为什么了吧。</p>
+<h1 id="伪共享"><a href="#伪共享" class="headerlink" title="伪共享"></a>伪共享</h1><p>通常提到缓存行，大多数文章都会提到伪共享问题（正如提到 CAS 就会联想到 ABA 问题一样）。</p>
+<p>伪共享指的是多个线程同时读写同一个缓存行的不同变量时导致的 CPU 缓存失效。尽管这些变量之间没有任何关系，但由于在主内存中邻近，存在于同一个缓存行之中，它们的相互覆盖会导致频繁的缓存未命中，引发性能下降。伪共享问题难以被定位，如果系统设计者不理解 CPU 缓存架构，甚至永远无法发现我们编写程序还能更快。</p>
+<p>如果多个线程的变量共享了同一个 CacheLine，任意一方的修改操作都会使得整个 CacheLine 失效（因为 CacheLine 是 CPU 缓存的最小单位），也就意味着，频繁的多线程操作，CPU 缓存将会彻底失效，降级为 CPU core 和主内存的直接交互。</p>
+<p>伪共享问题的解决方法便是字节填充。我们只需要保证不同线程的变量存在于不同的 CacheLine 即可，使用多余的字节来填充可以做点这一点，这样就不会出现伪共享问题。具体的代码实现如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PaddingObject</span></span>&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">volatile</span> <span class="keyword">long</span> value = <span class="number">0L</span>;    <span class="comment">// 实际数据</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">long</span> p1, p2, p3, p4, p5, p6; <span class="comment">// 填充</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>PaddingObject 类中需要保存一个 long 类型的 value 值，如果多线程操作同一个 CacheLine 中的 PaddingObject 对象，便无法完全发挥出 CPU Cache 的优势。不知道大家注意到没有， value + 用来填充缓存行的变量 p1~p6 只占了 56 字节，缓存行的大小是 64 字节，这是为什么？因为在 Java 中，<strong>对象头</strong>还占了 8 字节，所以一个 PaddingObject 对象可以恰好占据一个 Cache Line。</p>
+<p>如果大家对伪共享这个现象感兴趣，可以尝试运行以下代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">FalseSharing</span> <span class="keyword">implements</span> <span class="title">Runnable</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="keyword">int</span> NUM_THREADS = <span class="number">4</span>; <span class="comment">// change</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="keyword">long</span> ITERATIONS = <span class="number">500L</span> * <span class="number">1000L</span> * <span class="number">1000L</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> arrayIndex;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> VolatileLong[] longs = <span class="keyword">new</span> VolatileLong[NUM_THREADS];</span><br><span class="line">    <span class="keyword">static</span> &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; longs.length; i++) &#123;</span><br><span class="line">            longs[i] = <span class="keyword">new</span> VolatileLong();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">FalseSharing</span><span class="params">(<span class="keyword">final</span> <span class="keyword">int</span> arrayIndex)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.arrayIndex = arrayIndex;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(<span class="keyword">final</span> String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="comment">// good 18354, 18s</span></span><br><span class="line">        <span class="comment">//      43278, 43s</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 43558</span></span><br><span class="line">        <span class="comment">// 4336</span></span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">long</span> start = System.currentTimeMillis();</span><br><span class="line">        runTest();</span><br><span class="line">        System.out.println(<span class="string">"duration = "</span> + (System.currentTimeMillis() - start));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">runTest</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        Thread[] threads = <span class="keyword">new</span> Thread[NUM_THREADS];</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; threads.length; i++) &#123;</span><br><span class="line">            threads[i] = <span class="keyword">new</span> Thread(<span class="keyword">new</span> FalseSharing(i));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (Thread t : threads) &#123;</span><br><span class="line">            t.start();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (Thread t : threads) &#123;</span><br><span class="line">            t.join();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">long</span> i = ITERATIONS + <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">while</span> (<span class="number">0</span> != --i) &#123;</span><br><span class="line">            longs[arrayIndex].value = i;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">VolatileLong</span> </span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">volatile</span> <span class="keyword">long</span> value = <span class="number">0L</span>;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">volatile</span> <span class="keyword">long</span> p1, p2, p3, p4, p5, p6; <span class="comment">// padding comment out</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在我自己的 mac 电脑下，JDK 8 进行测试，使用和不使用字节填充在执行时间上差了 10 倍。</p>
+<h2 id="Java-8-中实现字节填充"><a href="#Java-8-中实现字节填充" class="headerlink" title="Java 8 中实现字节填充"></a>Java 8 中实现字节填充</h2><p>Java8 中提供了字节填充的官方实现，这无疑使得 CPU Cache 更加可控了，无需担心 JDK 的无效字段优化，无需担心 Cache Line 在不同 CPU 下的大小究竟是不是 64 字节。使用 @Contended 注解可以完美的避免伪共享问题。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)</span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.FIELD, ElementType.TYPE&#125;)</span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Contended &#123;</span><br><span class="line">    <span class="function">String <span class="title">value</span><span class="params">()</span> <span class="keyword">default</span> ""</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>注意需要同时开启 JVM 参数：-XX:-RestrictContended=false</strong></p>
+<h1 id="关于-CPU-缓存行的一些案例"><a href="#关于-CPU-缓存行的一些案例" class="headerlink" title="关于 CPU 缓存行的一些案例"></a>关于 CPU 缓存行的一些案例</h1><p>看到这里，有些朋友可能会有这样的疑问，作为一名普通开发人员，需要关心 CPU Cache 和 Cache Line 这些知识点吗？这个就是仁者见仁、智者见智了。但是确实有不少优秀的源码在关注着这些问题。</p>
+<h2 id="ConcurrentHashMap"><a href="#ConcurrentHashMap" class="headerlink" title="ConcurrentHashMap"></a><strong>ConcurrentHashMap</strong></h2><p>在 ConcurrentHashMap 中有一个很基本的操作问题，在并发条件下进行 ++ 操作。因为 ++ 这个操作并不是原子的，而且在连续的 Atomic 中，很容易产生伪共享（false sharing）。所以在其内部有专门的数据结构来保存 long 型的数据:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* ---------------- Counter support -------------- */</span></span><br><span class="line"> </span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * A padded cell for distributing counts.  Adapted from LongAdder</span></span><br><span class="line"><span class="comment"> * and Striped64.  See their internal docs for explanation.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"> <span class="meta">@sun</span>.misc.Contended <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">CounterCell</span> </span>&#123;</span><br><span class="line">     <span class="keyword">volatile</span> <span class="keyword">long</span> value;</span><br><span class="line">     CounterCell(<span class="keyword">long</span> x) &#123; value = x; &#125;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="JDK-1-8-的-Thread"><a href="#JDK-1-8-的-Thread" class="headerlink" title="JDK 1.8 的 Thread"></a>JDK 1.8 的 Thread</h2><p>java.lang.Thread在java中，生成随机数是和线程有着关联。而且在很多情况下，多线程下产生随机数的操作是很常见的，JDK为了确保产生随机数的操作不会产生false sharing ,把产生随机数的三个相关值设为独占cache line。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// The following three initially uninitialized fields are exclusively</span></span><br><span class="line"><span class="comment">// managed by class java.util.concurrent.ThreadLocalRandom. These</span></span><br><span class="line"><span class="comment">// fields are used to build the high-performance PRNGs in the</span></span><br><span class="line"><span class="comment">// concurrent code, and we can not risk accidental false sharing.</span></span><br><span class="line"><span class="comment">// Hence, the fields are isolated with @Contended.</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/** The current seed for a ThreadLocalRandom */</span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended(<span class="string">"tlr"</span>)</span><br><span class="line"><span class="keyword">long</span> threadLocalRandomSeed;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Probe hash value; nonzero if threadLocalRandomSeed initialized */</span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended(<span class="string">"tlr"</span>)</span><br><span class="line"><span class="keyword">int</span> threadLocalRandomProbe;</span><br><span class="line"></span><br><span class="line"><span class="comment">/** Secondary seed isolated from public ThreadLocalRandom sequence */</span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended(<span class="string">"tlr"</span>)</span><br><span class="line"><span class="keyword">int</span> threadLocalRandomSecondarySeed;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Disruptor-框架"><a href="#Disruptor-框架" class="headerlink" title="Disruptor 框架"></a>Disruptor 框架</h2><p>Disruptor是一个线程内通信框架，用于线程里共享数据。与LinkedBlockingQueue类似，提供了一个高速的生产者消费者模型，广泛用于批量IO读写，在硬盘读写相关的程序中应用的十分广泛，Apache旗下的HBase、Hive、Storm等框架都有在使用Disruptor。</p>
+<p>RingBuffer 是 Disruptor 中的核心类。它也针对了伪共享进行了处理。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">RingBufferPad</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">    <span class="keyword">protected</span> <span class="keyword">long</span> p1, p2, p3, p4, p5, p6, p7;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">RingBufferFields</span>&lt;<span class="title">E</span>&gt; <span class="keyword">extends</span> <span class="title">RingBufferPad</span></span>&#123;&#125;</span><br></pre></td></tr></table></figure>
+
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>Bruce Qiu
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://bruceqiu90.github.io/2020/10/20/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/" title="彻底理解CPU Cache和缓存行">https://bruceqiu90.github.io/2020/10/20/彻底理解CPU-Cache和缓存行/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+<div>
+  
+    <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+
+  
+</div>
+      <footer class="post-footer">
+          
+          <div class="post-tags">
+              <a href="/tags/Java/" rel="tag"><i class="fa fa-tag"></i> Java</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/09/13/SparkContext-%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B%E5%88%86%E6%9E%90-%E2%80%94-%E5%88%9B%E5%BB%BA-SparkEnv/" rel="prev" title="SparkContext 启动流程分析 — 创建 SparkEnv">
+      <i class="fa fa-chevron-left"></i> SparkContext 启动流程分析 — 创建 SparkEnv
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#认识-CPU-Cache"><span class="nav-number">1.</span> <span class="nav-text">认识 CPU Cache</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#什么是缓存行"><span class="nav-number">2.</span> <span class="nav-text">什么是缓存行</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#伪共享"><span class="nav-number">3.</span> <span class="nav-text">伪共享</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Java-8-中实现字节填充"><span class="nav-number">3.1.</span> <span class="nav-text">Java 8 中实现字节填充</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#关于-CPU-缓存行的一些案例"><span class="nav-number">4.</span> <span class="nav-text">关于 CPU 缓存行的一些案例</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#ConcurrentHashMap"><span class="nav-number">4.1.</span> <span class="nav-text">ConcurrentHashMap</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#JDK-1-8-的-Thread"><span class="nav-number">4.2.</span> <span class="nav-text">JDK 1.8 的 Thread</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Disruptor-框架"><span class="nav-number">4.3.</span> <span class="nav-text">Disruptor 框架</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Bruce Qiu</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/BruceQiu90" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;BruceQiu90" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:qiuyanjun.90@gmail.com" title="E-Mail → mailto:qiuyanjun.90@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2019 – 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">布鲁斯</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-area"></i>
+    </span>
+      <span class="post-meta-item-text">站点总字数：</span>
+    <span title="站点总字数">47k</span>
+</div>
+<span id="busuanzi_container_site_uv">
+  本站访问次数：<span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+</span>
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/clicklove.js"></script>
