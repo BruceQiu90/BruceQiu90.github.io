@@ -20,18 +20,20 @@
     var CONFIG = {"hostname":"bruceqiu90.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
   </script>
 
-  <meta name="description" content="HashMap 概述HashMap 的数据结构在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构，数组具有增删慢查找快的特点，而链表具有增删快查找慢 的特点。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于8时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK">
+  <meta name="description" content="HashMap 概述HashMap 的数据结构在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于 8 时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK7与JDK8中 HashMap 实现的最大区别。本篇文章">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Java HashMap 源码分析(JDK1.8)">
 <meta property="og:url" content="https://bruceqiu90.github.io/2020/06/21/Java-HashMap-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-JDK1-8/index.html">
 <meta property="og:site_name" content="布鲁斯IO">
-<meta property="og:description" content="HashMap 概述HashMap 的数据结构在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构，数组具有增删慢查找快的特点，而链表具有增删快查找慢 的特点。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于8时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK">
+<meta property="og:description" content="HashMap 概述HashMap 的数据结构在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于 8 时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK7与JDK8中 HashMap 实现的最大区别。本篇文章">
 <meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://bruceqiu90.github.io/2020/06/21/Java-HashMap-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-JDK1-8/resize.png">
 <meta property="article:published_time" content="2020-06-21T07:41:00.000Z">
-<meta property="article:modified_time" content="2020-08-20T14:30:43.996Z">
+<meta property="article:modified_time" content="2021-10-04T05:46:20.303Z">
 <meta property="article:author" content="Bruce Qiu">
 <meta property="article:tag" content="Java 集合">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://bruceqiu90.github.io/2020/06/21/Java-HashMap-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-JDK1-8/resize.png">
 
 <link rel="canonical" href="https://bruceqiu90.github.io/2020/06/21/Java-HashMap-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-JDK1-8/">
 
@@ -197,7 +199,7 @@
                   <i class="far fa-calendar-check"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2020-08-20 22:30:43" itemprop="dateModified" datetime="2020-08-20T22:30:43+08:00">2020-08-20</time>
+                <time title="修改时间：2021-10-04 13:46:20" itemprop="dateModified" datetime="2021-10-04T13:46:20+08:00">2021-10-04</time>
               </span>
 
           
@@ -213,7 +215,7 @@
                 <i class="far fa-file-word"></i>
               </span>
                 <span class="post-meta-item-text">本文字数：</span>
-              <span>4.4k</span>
+              <span>3.7k</span>
             </span>
 
         </div>
@@ -225,24 +227,75 @@
     <div class="post-body" itemprop="articleBody">
 
       
-        <h1 id="HashMap-概述"><a href="#HashMap-概述" class="headerlink" title="HashMap 概述"></a>HashMap 概述</h1><h2 id="HashMap-的数据结构"><a href="#HashMap-的数据结构" class="headerlink" title="HashMap 的数据结构"></a>HashMap 的数据结构</h2><p>在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构，<strong>数组具有增删慢查找快的特点，而链表具有增删快查找慢</strong> 的特点。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于8时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK7与JDK8中HashMap实现的最大区别。</p>
+        <h1 id="HashMap-概述"><a href="#HashMap-概述" class="headerlink" title="HashMap 概述"></a>HashMap 概述</h1><h2 id="HashMap-的数据结构"><a href="#HashMap-的数据结构" class="headerlink" title="HashMap 的数据结构"></a>HashMap 的数据结构</h2><p>在 JDK1.7 的时候，HashMap 的数据结构是数组加链表的结构。到了 JDK1.8 的时候，HashMap 的源码进行了大量的修改，采用了数组 + 链表 + 红黑树的结构。当同一个hash值的节点数不小于 8 时，将不再以单链表的形式存储了，会被调整成一颗红黑树，提高查询效率，这就是JDK7与JDK8中 HashMap 实现的最大区别。本篇文章会对 HashMap 1.8 的源码进行分析。</p>
 <a id="more"></a>
 
-<h2 id="存储节点-Node-和-TreeNode"><a href="#存储节点-Node-和-TreeNode" class="headerlink" title="存储节点 Node 和 TreeNode"></a>存储节点 Node 和 TreeNode</h2><p>HashMap 中将我们存入的每一个数据封装成一个 Node 类（Node节点），Node 应该有以下下属性 ：key、value组成我们 put 的键值对，既然要组织起链表则必须有Node next属性、还有一个根据key算出的 int 类型 hash 值，hash 值用来确定该该节点所在数组的索引后面会进行详细描述。Node 节点的部分源码如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">implements</span> <span class="title">Map</span>.<span class="title">Entry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">int</span> hash;</span><br><span class="line">    <span class="keyword">final</span> K key;</span><br><span class="line">    V value;</span><br><span class="line">    Node&lt;K,V&gt; next;</span><br><span class="line"></span><br><span class="line">    Node(<span class="keyword">int</span> hash, K key, V value, Node&lt;K,V&gt; next) &#123;</span><br><span class="line">      <span class="keyword">this</span>.hash = hash;</span><br><span class="line">      <span class="keyword">this</span>.key = key;</span><br><span class="line">      <span class="keyword">this</span>.value = value;</span><br><span class="line">      <span class="keyword">this</span>.next = next;</span><br><span class="line">    &#125;</span><br><span class="line">  <span class="comment">// 此处省略部分代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>当链表长度大于 8 时将链表转换成红黑树，红黑树节点 TreeNode 部分源码如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">TreeNode</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">extends</span> <span class="title">LinkedHashMap</span>.<span class="title">Entry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">        TreeNode&lt;K,V&gt; parent;  <span class="comment">// red-black tree links</span></span><br><span class="line">        TreeNode&lt;K,V&gt; left;</span><br><span class="line">        TreeNode&lt;K,V&gt; right;</span><br><span class="line">        TreeNode&lt;K,V&gt; prev;    <span class="comment">// needed to unlink next upon deletion</span></span><br><span class="line">        <span class="keyword">boolean</span> red;</span><br><span class="line">        TreeNode(<span class="keyword">int</span> hash, K key, V val, Node&lt;K,V&gt; next) &#123;</span><br><span class="line">            <span class="keyword">super</span>(hash, key, val, next);</span><br><span class="line">        &#125;</span><br><span class="line">  	<span class="comment">// 此处省略部分代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>需要注意的是：HashMap 链表转红黑树的条件，并非当链表长度大于 8 就可以，还需要满足以下条件才能进行树化：</p>
+<h2 id="1-7-和-1-8-的区别"><a href="#1-7-和-1-8-的区别" class="headerlink" title="1.7 和 1.8 的区别"></a>1.7 和 1.8 的区别</h2><table>
+<thead>
+<tr>
+<th>不同</th>
+<th>1.7</th>
+<th>1.8</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>插入元素的方法</td>
+<td>头插法</td>
+<td>尾插法（解决了1.7 环形链表产生的死循环问题）</td>
+</tr>
+<tr>
+<td>存储结构</td>
+<td>数组+链表</td>
+<td>数组+链表+红黑树</td>
+</tr>
+<tr>
+<td>初始化方式</td>
+<td>单独函数：inflateTable()</td>
+<td>集成到扩容函数 resize() 中</td>
+</tr>
+<tr>
+<td>hash 值计算</td>
+<td>4次位运算+5次异或运算=9次扰动</td>
+<td>1次位运算+1次异或运算=2次扰动</td>
+</tr>
+<tr>
+<td>数据存放规则</td>
+<td>无冲突，存放数组；有冲突，存放链表</td>
+<td>无冲突，存放数组；有冲突且链表长度&lt;8，存放链表；冲突且链表长度&gt;8，存放红黑树</td>
+</tr>
+<tr>
+<td>扩容后存储位置计算</td>
+<td>需要对每个元素重新进行 hash 计算出新的位置</td>
+<td>扩容后位置=原位置 or 原位置 + 旧容量</td>
+</tr>
+</tbody></table>
+<h2 id="HashMap-1-8-为什么要做上面的改变"><a href="#HashMap-1-8-为什么要做上面的改变" class="headerlink" title="HashMap 1.8 为什么要做上面的改变"></a>HashMap 1.8 为什么要做上面的改变</h2><p>防止发生hash冲突，链表长度过长，将时间复杂度由O(n)降为O(logn)。</p>
+<p>因为1.7头插法扩容时，头插法会使链表发生反转，多线程环境下会产生环。</p>
+<h2 id="HashMap-怎么设定初始容量大小"><a href="#HashMap-怎么设定初始容量大小" class="headerlink" title="HashMap 怎么设定初始容量大小"></a>HashMap 怎么设定初始容量大小</h2><p>如果 <code>new Hashmap()</code> 不传值，默认大小是 16，负载因子是 0.75， 如果自己传入初始大小 k，初始化大小为大于（最接近） k 的 2的整数次方， 例如如果传 10，大小为 16。</p>
+<h2 id="HashMap-的-Hash-函数怎么设计的"><a href="#HashMap-的-Hash-函数怎么设计的" class="headerlink" title="HashMap 的 Hash 函数怎么设计的"></a>HashMap 的 Hash 函数怎么设计的</h2><p>hash函数是先拿到通过key 的hashcode，是32位的int值，然后让hashcode的高16位和低16位进行异或操作</p>
+<h3 id="为什么这么设计？"><a href="#为什么这么设计？" class="headerlink" title="为什么这么设计？"></a>为什么这么设计？</h3><p>这个也叫扰动函数，这么设计有二点原因：<br>一定要尽可能降低hash碰撞，越分散越好；<br>算法一定要尽可能高效，因为这是高频操作, 因此采用位运算；</p>
+<h3 id="为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？"><a href="#为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？" class="headerlink" title="为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？"></a>为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？</h3><p>因为 key.hashCode() 函数调用的是key键值类型自带的哈希函数，返回 int 型散列值。int 值范围前后加起来大概40亿的映射空间。但这么长的数组，内存是放不下的，HashMap 需要对数组的长度取模运算，得到的余数才能用来访问数组下标。</p>
+<p>这也正好解释了为什么HashMap的数组长度要取2的整数幂。因为这样（数组长度-1）正好相当于一个“低位掩码”。“与”操作的结果就是散列值的高位全部归零，只保留低位值，用来做数组下标访问。以初始长度16为例，16-1=15。2进制表示是00000000 00000000 00001111。和某散列值做“与”操作如下，结果就是截取了最低的四位值。</p>
+<h2 id="在-1-8-中扩容为什么不用重新hash就能定位原节点在新数组中的位置？"><a href="#在-1-8-中扩容为什么不用重新hash就能定位原节点在新数组中的位置？" class="headerlink" title="在 1.8 中扩容为什么不用重新hash就能定位原节点在新数组中的位置？"></a>在 1.8 中扩容为什么不用重新hash就能定位原节点在新数组中的位置？</h2><p>这是由于扩容是扩大为原数组大小的2倍，用于计算数组位置的掩码仅仅只是高位多了一个1。<br>扩容前长度为16，用于计算(n-1) &amp; hash 的二进制n-1为0000 1111，扩容为32后的二进制就高位多了1，为0001 1111。<br>因为是&amp; 运算，1和任何数 &amp; 都是它本身，那就分二种情况，如下图：原数据hashcode高位第4位为0和高位为1的情况；<br>第四位高位为0，重新hash数值不变，第四位为1，重新hash数值比原来大16（旧数组的容量）</p>
+<p><img src="/2020/06/21/Java-HashMap-%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90-JDK1-8/resize.png" alt="resize"></p>
+<h2 id="为什么1-8要改为尾插法"><a href="#为什么1-8要改为尾插法" class="headerlink" title="为什么1.8要改为尾插法"></a>为什么1.8要改为尾插法</h2><p>1.7 时候在多线程的情况下，如果hashmap在扩容时候，两个线程同时进行rehash的过程中，链表中的两个元素会形成环，形成死循环。<br>使用头插会改变链表的上的顺序，但是如果使用尾插，在扩容时会保持链表元素原本的顺序，就不会出现链表成环的问题了</p>
+<h3 id="使用尾插法是否代表1-8线程安全？"><a href="#使用尾插法是否代表1-8线程安全？" class="headerlink" title="使用尾插法是否代表1.8线程安全？"></a>使用尾插法是否代表1.8线程安全？</h3><p>因为put 和 get 方法没有加同步锁，在多线程情况下无法保证上一秒 put 的值，下一秒 get 的时候还是原值。</p>
+<h2 id="为什么要使用红黑树"><a href="#为什么要使用红黑树" class="headerlink" title="为什么要使用红黑树"></a>为什么要使用红黑树</h2><p>防止发生hash冲突时，链表长度过长导致的搜索缓慢的问题，使用红黑树将搜索元素的时间复杂度由O(n)降为O(logn)。</p>
+<p>红黑树是一棵二叉查找树，但它在二叉查找树的基础上增加了着色和相关的性质使得红黑树相对平衡，从而保证了红黑树的查找、插入、删除的时间复杂度最坏为O(log n)。加快检索速率。</p>
+<p><strong>红黑树的5个特点</strong></p>
 <ol>
-<li>链表长度达到 8 </li>
-<li>数组长度达到64</li>
+<li>每个结点要么是红的要么是黑的。</li>
+<li>根结点是黑的。</li>
+<li>每个叶结点（叶结点即指树尾端NIL指针或NULL结点）都是黑的。</li>
+<li>如果一个结点是红的，那么它的两个儿子都是黑的。</li>
+<li>对于任意结点而言，其到叶结点树尾端NIL指针的每条路径都包含相同数目的黑结点。</li>
 </ol>
-<p>具体源码在 treeifyBin 方法中。</p>
+<p><strong>和AVL树的区别</strong><br>对于插入删除等操作效率红黑树比AVL树提高很多。因为红黑树允许局部很少的不完全平衡来节省很多没必要的平衡操作，来提高效率。<br>AVL树有很多平衡调整，代价较大，效率不如红黑树<br>在检索上两个效率差不多。</p>
+<p><strong>为什么不直接使用红黑树</strong><br>因为树节点所占空间是普通节点的两倍，所以只有当节点足够多的时候，才会使用树节点。</p>
 <h2 id="为什么-HashMap-数组的长度要是-2-的整数幂"><a href="#为什么-HashMap-数组的长度要是-2-的整数幂" class="headerlink" title="为什么 HashMap 数组的长度要是 2 的整数幂"></a>为什么 HashMap 数组的长度要是 2 的整数幂</h2><p>我们希望理想的情况是：任意一个 Key 落在数组中的位置是足够散列的，这样可以减少 Hash 碰撞的概率。</p>
 <p>假设计算出的 Hash 值是足够散列的，由于 Hash 值是一个 int 类型的值，大部分情况下 HashMap 数组是不会那么长的。所以在有限的数组长度内，当然是取 Hash 值的低几位算是比较理想的散列方式。</p>
 <p>正因为此，而任何 2 的整数幂，减一得到的二进制位全部是一。如：16-1=15，二进制表示为：<code>1111</code>；32-1=31，二进制表示为：<code>11111</code>。所以让Hash值与（&amp;）上n-1后得到的就是低位Hash值，如：</p>
+<p>批注：要说重点，把原因说出来</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">    00100100 10100101 11000100 00100101    &#x2F;&#x2F; Hash值</span><br><span class="line">&amp;   00000000 00000000 00000000 00001111    &#x2F;&#x2F; 16 - 1 &#x3D; 15</span><br><span class="line">----------------------------------</span><br><span class="line">    00000000 00000000 00000000 00000101    &#x2F;&#x2F; 高位全部归零，只保留末四位。</span><br></pre></td></tr></table></figure>
 
 
@@ -264,36 +317,6 @@
 
 
 
-<h1 id="HashMap-源码分析"><a href="#HashMap-源码分析" class="headerlink" title="HashMap 源码分析"></a>HashMap 源码分析</h1><h2 id="重要的成员变量属性"><a href="#重要的成员变量属性" class="headerlink" title="重要的成员变量属性"></a>重要的成员变量属性</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 容量（capacity）： 必须是2的幂 &amp; &lt;最大容量（2的30次方）</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> DEFAULT_INITIAL_CAPACITY = <span class="number">1</span> &lt;&lt; <span class="number">4</span>; <span class="comment">// 默认容量 = 16 = 1&lt;&lt;4 = 00001中的1向左移4位 = 10000 = 十进制的2^4=16</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> MAXIMUM_CAPACITY = <span class="number">1</span> &lt;&lt; <span class="number">30</span>; <span class="comment">// 最大容量 =  2的30次方（若传入的容量过大，将被最大值替换）</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 加载因子(Load factor)：HashMap在其容量自动增加前可达到多满的一种尺度 </span></span><br><span class="line"><span class="keyword">final</span> <span class="keyword">float</span> loadFactor; <span class="comment">// 实际加载因子</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">float</span> DEFAULT_LOAD_FACTOR = <span class="number">0.75f</span>; <span class="comment">// 默认加载因子 = 0.75</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 扩容阈值（threshold）：当哈希表的大小 ≥ 扩容阈值时，就会扩容哈希表（即扩充HashMap的容量） </span></span><br><span class="line"><span class="comment">// a. 扩容 = 对哈希表进行resize操作（即重建内部数据结构），从而哈希表将具有大约两倍的桶数</span></span><br><span class="line"><span class="comment">// b. 扩容阈值 = 容量 x 加载因子</span></span><br><span class="line"><span class="keyword">int</span> threshold;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 其他</span></span><br><span class="line"><span class="keyword">transient</span> Node&lt;K,V&gt;[] table;  <span class="comment">// 存储数据的Node类型 数组，长度 = 2的幂；数组的每个元素 = 1个单链表</span></span><br><span class="line"><span class="keyword">transient</span> <span class="keyword">int</span> size;<span class="comment">// HashMap的大小，即 HashMap中存储的键值对的数量</span></span><br><span class="line"> </span><br><span class="line"></span><br><span class="line"><span class="comment">/** </span></span><br><span class="line"><span class="comment"> * 与红黑树相关的参数</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"> <span class="comment">// 1. 桶的树化阈值：即 链表转成红黑树的阈值，在存储数据时，当链表长度 &gt; 该值时，则将链表转换成红黑树</span></span><br><span class="line"> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> TREEIFY_THRESHOLD = <span class="number">8</span>; </span><br><span class="line"> <span class="comment">// 2. 桶的链表还原阈值：即 红黑树转为链表的阈值，当在扩容 (resize()) 时（此时 HashMap 的数据存储位置会重新计算），在重新计算存储位置后，当原有的红黑树内数量 &lt; 6 时，则将红黑树转换成链表</span></span><br><span class="line"> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> UNTREEIFY_THRESHOLD = <span class="number">6</span>;</span><br><span class="line"> <span class="comment">// 3. 最小树形化容量阈值：即当哈希表中的容量 &gt; 该值时，才允许树形化链表 （即将链表转换成红黑树）</span></span><br><span class="line"> <span class="comment">// 否则，若桶内元素太多时，则直接扩容，而不是树形化</span></span><br><span class="line"> <span class="comment">// 为了避免进行扩容、树形化选择的冲突，这个值不能小于 4 * TREEIFY_THRESHOLD</span></span><br><span class="line"> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> MIN_TREEIFY_CAPACITY = <span class="number">64</span>;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<h2 id="put-方法"><a href="#put-方法" class="headerlink" title="put 方法"></a>put 方法</h2><p>put 方法最后交给了 HashMap 的 putVal 方法，大致流程如下：</p>
-<ol>
-<li>根据传入的key,计算hash值</li>
-<li>判断键值对数组tab[]是否为空或为null，否则以默认大小resize()进行数组的初始化操作</li>
-<li>根据键值key计算hash值得到插入的数组索引i，如果tab[i]==null，直接新建节点添加，否则转入3</li>
-<li>判断当前数组中处理hash冲突的方式为链表还是红黑树(check第一个节点类型即可),分别处理</li>
-</ol>
-<p>putVal 方法源码解读：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// TODO</span></span><br></pre></td></tr></table></figure>
-
-
-
-
-
-
-
-<h2 id="扩容机制-resize"><a href="#扩容机制-resize" class="headerlink" title="扩容机制 resize"></a>扩容机制 resize</h2><h3 id="触发时机"><a href="#触发时机" class="headerlink" title="触发时机"></a>触发时机</h3><ul>
-<li>当HashMap的使用的桶数达到总桶数*加载因子的时候会触发扩容</li>
-<li>当某个桶中的链表长度达到8进行链表扭转为红黑树的时候，会检查总桶数是否小于64，如果总桶数小于64也会进行扩容</li>
-<li>当new完HashMap之后，第一次往HashMap进行put操作的时候，首先会进行扩容。</li>
-</ul>
-<h3 id="扩容后的节点分配"><a href="#扩容后的节点分配" class="headerlink" title="扩容后的节点分配"></a>扩容后的节点分配</h3><p>TODO</p>
-<h2 id="HashMap-死循环问题"><a href="#HashMap-死循环问题" class="headerlink" title="HashMap 死循环问题"></a>HashMap 死循环问题</h2><p>TODO</p>
-<h2 id="和1-7-的区别"><a href="#和1-7-的区别" class="headerlink" title="和1.7 的区别"></a>和1.7 的区别</h2><p>resize 方法在 HashMap 进行第一次初始化时会对其进行扩容，或者当该数组的实际大小大于其临界值值(第一次为12)，这个时候在扩容的同时也会伴随的桶上面的元素进行重新分发，这也是 JDK 1.8 版本的一个优化的地方，在 1.7 中，扩容之后需要重新去计算其Hash值，根据Hash值对其进行分发，但在1.8版本中，则是根据在同一个桶的位置中进行判断(e.hash &amp; oldCap)是否为0，重新进行hash分配后，该元素的位置要么停留在原始位置，要么移动到原始位置+增加的数组大小这个位置上</p>
 
     </div>
 
@@ -404,7 +427,7 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#HashMap-概述"><span class="nav-number">1.</span> <span class="nav-text">HashMap 概述</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-的数据结构"><span class="nav-number">1.1.</span> <span class="nav-text">HashMap 的数据结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#存储节点-Node-和-TreeNode"><span class="nav-number">1.2.</span> <span class="nav-text">存储节点 Node 和 TreeNode</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么-HashMap-数组的长度要是-2-的整数幂"><span class="nav-number">1.3.</span> <span class="nav-text">为什么 HashMap 数组的长度要是 2 的整数幂</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#扰动函数"><span class="nav-number">1.4.</span> <span class="nav-text">扰动函数</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#HashMap-源码分析"><span class="nav-number">2.</span> <span class="nav-text">HashMap 源码分析</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#重要的成员变量属性"><span class="nav-number">2.1.</span> <span class="nav-text">重要的成员变量属性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#put-方法"><span class="nav-number">2.2.</span> <span class="nav-text">put 方法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#扩容机制-resize"><span class="nav-number">2.3.</span> <span class="nav-text">扩容机制 resize</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#触发时机"><span class="nav-number">2.3.1.</span> <span class="nav-text">触发时机</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#扩容后的节点分配"><span class="nav-number">2.3.2.</span> <span class="nav-text">扩容后的节点分配</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-死循环问题"><span class="nav-number">2.4.</span> <span class="nav-text">HashMap 死循环问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#和1-7-的区别"><span class="nav-number">2.5.</span> <span class="nav-text">和1.7 的区别</span></a></li></ol></li></ol></div>
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#HashMap-概述"><span class="nav-number">1.</span> <span class="nav-text">HashMap 概述</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-的数据结构"><span class="nav-number">1.1.</span> <span class="nav-text">HashMap 的数据结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-7-和-1-8-的区别"><span class="nav-number">1.2.</span> <span class="nav-text">1.7 和 1.8 的区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-1-8-为什么要做上面的改变"><span class="nav-number">1.3.</span> <span class="nav-text">HashMap 1.8 为什么要做上面的改变</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-怎么设定初始容量大小"><span class="nav-number">1.4.</span> <span class="nav-text">HashMap 怎么设定初始容量大小</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#HashMap-的-Hash-函数怎么设计的"><span class="nav-number">1.5.</span> <span class="nav-text">HashMap 的 Hash 函数怎么设计的</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#为什么这么设计？"><span class="nav-number">1.5.1.</span> <span class="nav-text">为什么这么设计？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？"><span class="nav-number">1.5.2.</span> <span class="nav-text">为什么采用hashcode的高16位和低16位异或能降低hash碰撞？hash函数能不能直接用key的hashcode？</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#在-1-8-中扩容为什么不用重新hash就能定位原节点在新数组中的位置？"><span class="nav-number">1.6.</span> <span class="nav-text">在 1.8 中扩容为什么不用重新hash就能定位原节点在新数组中的位置？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么1-8要改为尾插法"><span class="nav-number">1.7.</span> <span class="nav-text">为什么1.8要改为尾插法</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#使用尾插法是否代表1-8线程安全？"><span class="nav-number">1.7.1.</span> <span class="nav-text">使用尾插法是否代表1.8线程安全？</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么要使用红黑树"><span class="nav-number">1.8.</span> <span class="nav-text">为什么要使用红黑树</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么-HashMap-数组的长度要是-2-的整数幂"><span class="nav-number">1.9.</span> <span class="nav-text">为什么 HashMap 数组的长度要是 2 的整数幂</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#扰动函数"><span class="nav-number">1.10.</span> <span class="nav-text">扰动函数</span></a></li></ol></li></ol></div>
       </div>
       <!--/noindex-->
 
@@ -418,7 +441,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-count">9</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -463,7 +486,7 @@
 <div class="copyright">
   
   &copy; 2019 – 
-  <span itemprop="copyrightYear">2020</span>
+  <span itemprop="copyrightYear">2021</span>
   <span class="with-love">
     <i class="fa fa-heart"></i>
   </span>
@@ -473,7 +496,7 @@
       <i class="fa fa-chart-area"></i>
     </span>
       <span class="post-meta-item-text">站点总字数：</span>
-    <span title="站点总字数">47k</span>
+    <span title="站点总字数">52k</span>
 </div>
 <span id="busuanzi_container_site_uv">
   本站访问次数：<span class="busuanzi-value" id="busuanzi_value_site_pv"></span>

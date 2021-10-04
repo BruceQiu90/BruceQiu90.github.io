@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"bruceqiu90.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在讲解并发锁机制 AQS 的过程中，我们知道了 AQS 分为独占式与共享式获取同步状态的实现。但是究竟线程是如何阻塞和唤醒的，这个过程我们还不知道。线程的这些阻塞和唤醒操作都是依靠 LockSupport 这个工具类实现的。现在我们来探讨一下它的具体实现。 LockSupport 的简单使用先看一个简单的例子 123456789101112131415161718192021222324publi">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java 并发 - LockSupport 原理剖析">
+<meta property="og:url" content="https://bruceqiu90.github.io/2020/11/16/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/index.html">
+<meta property="og:site_name" content="布鲁斯IO">
+<meta property="og:description" content="在讲解并发锁机制 AQS 的过程中，我们知道了 AQS 分为独占式与共享式获取同步状态的实现。但是究竟线程是如何阻塞和唤醒的，这个过程我们还不知道。线程的这些阻塞和唤醒操作都是依靠 LockSupport 这个工具类实现的。现在我们来探讨一下它的具体实现。 LockSupport 的简单使用先看一个简单的例子 123456789101112131415161718192021222324publi">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://bruceqiu90.github.io/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/dump1.png">
+<meta property="og:image" content="https://bruceqiu90.github.io/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/dump2.png">
+<meta property="article:published_time" content="2020-11-16T14:20:23.000Z">
+<meta property="article:modified_time" content="2020-12-07T12:22:10.283Z">
+<meta property="article:author" content="Bruce Qiu">
+<meta property="article:tag" content="Java 并发">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://bruceqiu90.github.io/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/dump1.png">
+
+<link rel="canonical" href="https://bruceqiu90.github.io/2020/11/16/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>Java 并发 - LockSupport 原理剖析 | 布鲁斯IO</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+	<a href="https://your-url" target="_blank" rel="noopener" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#70B7FD; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">布鲁斯IO</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2020/11/16/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java 并发 - LockSupport 原理剖析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-11-16 22:20:23" itemprop="dateCreated datePublished" datetime="2020-11-16T22:20:23+08:00">2020-11-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-12-07 20:22:10" itemprop="dateModified" datetime="2020-12-07T20:22:10+08:00">2020-12-07</time>
+              </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span><br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>5.8k</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在讲解并发锁机制 AQS 的过程中，我们知道了 AQS 分为独占式与共享式获取同步状态的实现。但是究竟线程是如何阻塞和唤醒的，这个过程我们还不知道。线程的这些阻塞和唤醒操作都是依靠 <code>LockSupport</code> 这个工具类实现的。现在我们来探讨一下它的具体实现。</p>
+<h1 id="LockSupport-的简单使用"><a href="#LockSupport-的简单使用" class="headerlink" title="LockSupport 的简单使用"></a>LockSupport 的简单使用</h1><p>先看一个简单的例子</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LockSupportTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        Thread executor = <span class="keyword">new</span> Thread(() -&gt; &#123;</span><br><span class="line">            LockSupport.park();</span><br><span class="line">            System.out.println(<span class="string">"start work"</span>);</span><br><span class="line">        &#125;);</span><br><span class="line">        executor.start();</span><br><span class="line"></span><br><span class="line">        System.out.println(<span class="string">"main thread sleep 500 ms"</span>);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            TimeUnit.MILLISECONDS.sleep(<span class="number">500</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line">        LockSupport.unpark(executor);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            executor.join();</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            e.printStackTrace();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>启动一个 executor 线程，主线程先 sleep 500ms，executor 线程因为调用了 LockSupport 的 park，线程会等待直到主线程 sleep 结束调用 unpark 唤醒 executor 线程。输出的结果如下：</p>
+<blockquote>
+<p>main thread sleep 500 ms<br>start work</p>
+</blockquote>
+<p>如果不使用 LockSupport，我们常用的让线程等待的方法如下</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Object monitor = <span class="keyword">new</span> Object();</span><br><span class="line"><span class="keyword">synchronized</span> (monitor) &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        monitor.wait();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可见 LockSupport 和传统的 wait/notify 的等待唤醒机制主要有三点区别：</p>
+<ol>
+<li>LockSupport.park 和 unpark 不需要在同步代码块中，wait 和 notify 是需要的。</li>
+<li>LockSupport 的 park 和 unpark 是针对线程的，而 wait 和 notify 是可以是任意对象。</li>
+<li>LockSupport 的 unpark 可以让指定线程被唤醒，但是 notify 是随机唤醒一个，notifyAll 是全部唤醒，不够灵活。</li>
+</ol>
+<h2 id="关于许可"><a href="#关于许可" class="headerlink" title="关于许可"></a>关于许可</h2><p>park/unpark 的设计原理核心是“许可”。park 是等待一个许可。unpark 是为某线程提供一个许可。如果某线程 A 调用 park，那么除非另外一个线程调用 unpark(A) 给 A 一个许可，否则线程 A 将阻塞在 park 操作上。</p>
+<p>有一点比较难理解的，是 unpark 操作可以在 park 操作之前。也就是说，可以先提供许可。</p>
+<p><strong>当某线程调用 park 时，已经有许可了，它就消费这个许可，然后可以继续运行。这其实是必须的。</strong></p>
+<p>考虑最简单的生产者(Producer)消费者(Consumer)模型：Consumer 需要消费一个资源，于是调用 park 操作等待；Producer 则生产资源，然后调用 unpark 给予 Consumer 使用的许可。非常有可能的一种情况是，Producer 先生产，这时候 Consumer 可能还没有构造好（比如线程还没启动，或者还没切换到该线程）。那么等 Consumer 准备好要消费时，显然这时候资源已经生产好了，可以直接用，那么 park 操作当然可以直接运行下去。</p>
+<h2 id="和-Semaphore-对比"><a href="#和-Semaphore-对比" class="headerlink" title="和 Semaphore 对比"></a>和 Semaphore 对比</h2><p>这个类的作用有点类似于Semaphore，通过许可证(permit)来联系使用它的线程。</p>
+<p>如果许可证可用，调用park方法会立即返回并在这个过程中消费这个许可，不然线程会阻塞。</p>
+<p>调用unpark会使许可证可用。(和Semaphores有些许区别,许可证不会累加，最多只有一张）</p>
+<p>因为有了许可证，所以调用park和unpark的先后关系就不重要了，这里可以对比一下Object的wait和notify,如果先调用同一个对象的notify再wait，那么调用wait的线程依旧会被阻塞，依赖方法的调用顺序。</p>
+<h2 id="LockSupport-是否会释放锁资源"><a href="#LockSupport-是否会释放锁资源" class="headerlink" title="LockSupport 是否会释放锁资源"></a>LockSupport 是否会释放锁资源</h2><p>不会，它只负责阻塞当前线程，释放锁资源实际上是在 AQS 的条件对象 Condition 的 await() 方法中实现的。</p>
+<h2 id="中断响应"><a href="#中断响应" class="headerlink" title="中断响应"></a>中断响应</h2><p>我们尝试在调用 park 阻塞当前线程之后，再调用 interrupt 方法阻塞当前线程，这时候会发生什么情况，具体代码如下</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">InterruptLockSupportTest</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">MyThread</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">        <span class="keyword">private</span> Object object;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">MyThread</span><span class="params">(Object object)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">this</span>.object = object;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"before interrupt"</span>);</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// 休眠3s</span></span><br><span class="line">                Thread.sleep(<span class="number">3000</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">            Thread thread = (Thread) object;</span><br><span class="line">            <span class="comment">// 中断线程</span></span><br><span class="line">            thread.interrupt();</span><br><span class="line">            System.out.println(<span class="string">"after interrupt"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        MyThread myThread = <span class="keyword">new</span> MyThread(Thread.currentThread());</span><br><span class="line">        myThread.start();</span><br><span class="line">        System.out.println(<span class="string">"before park"</span>);</span><br><span class="line">        <span class="comment">// 获取许可</span></span><br><span class="line">        LockSupport.park(<span class="string">"ParkAndUnparkDemo"</span>);</span><br><span class="line">        System.out.println(<span class="string">"after park"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到，在主线程调用park阻塞后，在myThread线程中发出了中断信号，此时主线程会继续运行，也就是说明此时interrupt 起到的作用与 unpark 一样。</p>
+<h1 id="LockSupport-源码分析"><a href="#LockSupport-源码分析" class="headerlink" title="LockSupport 源码分析"></a>LockSupport 源码分析</h1><p>分析的源码基于 Open JDK 8，从 LockSupport 的源码中我们可以看到 LockSupport 中的对外提供的方法都是静态方法。这些方法提供了最基本的线程阻塞和唤醒功能，在 LockSupport 类中定义了一组以 <code>park</code> 开头的方法用来阻塞当前线程。以及<code>unPark(Thread thread)</code>方法来唤醒一个被阻塞的线程。关于 <code>park</code> 开头的方法具体描述如下表所示：</p>
+<table>
+<thead>
+<tr>
+<th>带 blocker 的方法</th>
+<th>不带 blocker 的方法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>park(Object blocker)</code></td>
+<td><code>park()</code></td>
+<td>阻塞当前线程，如果调用 <code>unpark(Thread thread)</code> 方法或者当前线程被中断，才能从 <code>park()</code> 方法返回</td>
+</tr>
+<tr>
+<td><code>parkNanos(Object blocker, long nanos)</code></td>
+<td><code>parkNanos(long nanos)</code></td>
+<td>阻塞当前线程，最长不超过 nanos 纳秒</td>
+</tr>
+<tr>
+<td><code>parkUntil(Object blocker, long deadline)</code></td>
+<td><code>parkUntil(long deadline)</code></td>
+<td>阻塞当前线程，直到 deadline</td>
+</tr>
+</tbody></table>
+<p>其中<code>park(Object blocker)</code>与<code>parkNanos(Object blocker, long nanos)</code>及<code>parkUntil(Object blocker, long deadline)</code>三个方法是 Java 6 中新增加的方法。其中参数 blocker 是用来标识当前线程等待的对象（下文简称为阻塞对象），该对象主要用于问题排查和系统监控。</p>
+<p><font color="red">下面关于 blocker dump 的内容待定</font></p>
+<p>下面的示例中，将对比parkNanos(long nanos)和parkNanos(Object blocker, long nanos)方法来展示阻塞对象blocker的用处。</p>
+<p>采用parkNanos(long nanos)阻塞线程：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LockSupportTest</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(<span class="number">20</span>));</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>线程 dump 结果</p>
+<p><img src="/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/dump1.png" alt="img"></p>
+<p>采用parkNanos(Object blocker, long nanos)阻塞线程：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LockSupportTest</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		LockSupport.parkNanos(<span class="keyword">new</span> Object(), TimeUnit.SECONDS.toNanos(<span class="number">20</span>));</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>线程 dump 结果</p>
+<p><img src="/Users/bruce/dev/blog/BruceQiu90.github.io/source/_posts/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/dump2.png" alt="img"></p>
+<h2 id="LockSupport-中的-Blocker"><a href="#LockSupport-中的-Blocker" class="headerlink" title="LockSupport 中的 Blocker"></a>LockSupport 中的 Blocker</h2><p>我们对 blocker 的设置有些好奇，既然线程已经被阻塞了，是通过什么办法将阻塞对象设置到线程中去的呢？这里我们看一下 LockSupport 中的 <code>park(Object blocker)</code> 方法，发现内部调用了 <code>setBlocker(Thread t, Object arg)</code> 方法。具体代码如下所示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">setBlocker</span><span class="params">(Thread t, Object arg)</span> </span>&#123;</span><br><span class="line">     UNSAFE.putObject(t, parkBlockerOffset, arg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中 <code>UNSAFE</code>为 sun.misc. 包下的<code>Unsafe</code>类。而其中的 parkBlockerOffset 是在静态代码块中进行赋值的，也就是如下代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> sun.misc.Unsafe UNSAFE = sun.misc.Unsafe.getUnsafe();</span><br><span class="line">    <span class="keyword">static</span> &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            UNSAFE = sun.misc.Unsafe.getUnsafe();</span><br><span class="line">            Class&lt;?&gt; tk = Thread<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">            parkBlockerOffset = UNSAFE.objectFieldOffset</span><br><span class="line">                (tk.getDeclaredField(<span class="string">"parkBlocker"</span>));</span><br><span class="line">		   <span class="comment">//省略部分代码</span></span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception ex) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> Error(ex);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>tk.getDeclaredField(&quot;parkBlocker&quot;)</code>方法其实很好理解，就是获取线程中的<code>parkBlocker</code>字段。如果有则返回其对应的 Field 字段，如果没有则抛出异常。<code>objectFieldOffset</code> 方法是 Unsafe 类提供的用于获取某个字段相对 Java 对象的“起始地址”的偏移量的方法。当获取到<code>parkBlocker</code>字段在其对象内存偏移量后， 接着会调用<code>UNSAFE.putObject(t, parkBlockerOffset, arg);</code>方法。该方法有三个参数，第一个参数是操作对象，第二个参数是内存偏移量，第三个参数是实际存储值。该方法理解起来也很简单，就是操作某个对象中某个内存地址下的数据。</p>
+<p>到现在，我们就应该懂了，尽管当前线程已经阻塞，但是我们还是能直接操控线程中实际存储该字段的内存区域来达到我们想要的结果。</p>
+<h2 id="构造函数"><a href="#构造函数" class="headerlink" title="构造函数"></a>构造函数</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 私有构造函数，无法被实例化</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="title">LockSupport</span><span class="params">()</span> </span>&#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>LockSupport 只有一个私有构造函数，无法被实例化。</p>
+<h2 id="核心函数分析"><a href="#核心函数分析" class="headerlink" title="核心函数分析"></a>核心函数分析</h2><p>park 和 unpark 是 LockSupport 中的核心方法，他们都是基于 UnSafe 类的 park 和 unpark 实现的。这两个函数的说明如下：</p>
+<ul>
+<li><p>park 函数，阻塞线程，并且该线程在下列情况发生之前都会被阻塞: ① 调用 unpark 函数，释放该线程的许可。② 该线程被中断。③ 设置的时间到了。并且，当 time 为绝对时间时，isAbsolute 为 true，否则，isAbsolute 为 false。当 time 为0时，表示无限等待，直到 unpark 发生。</p>
+</li>
+<li><p>unpark 函数，释放线程的许可，即激活调用 park 后阻塞的线程。这个函数不是安全的，调用这个函数时要确保线程依旧存活。</p>
+</li>
+</ul>
+<h2 id="底层实现"><a href="#底层实现" class="headerlink" title="底层实现"></a>底层实现</h2><p>底层 JVM 通过 Parker 类的 _counter 来表示通行证，&gt;0 表示可以通行，如果 _counter=0，调用 park 线程会等待，直到被 unpark 唤醒，如果先调用 unpack，再调用 park 会直接返回，并消费掉 _counter（设置为0）。</p>
+<p>Linux平台，线程等待和唤醒，加锁用的 pthread_mutex_lock，解锁是 pthread_mutex_unlock，唤醒是 pthread_cond_signal。</p>
+<p>最后再分享一下关于线程状态的小知识：</p>
+<ol>
+<li>NEW （新建的线程，还没有调用start）</li>
+<li>RUNNABLE  (调用了start，正在运行，或者在等待操作系统的调度，分配CPU时间片)</li>
+<li>BLOCKED   （synchronied，等待monitorEnter）</li>
+<li>WAITING    （wait，LockSupport.park 会进入该状态）</li>
+<li>TIMED_WAITING (带等待时间的wait, LockSupport.parkNanos, parkUtil)</li>
+<li>TERMINATED  (线程执行结束)</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>Bruce Qiu
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://bruceqiu90.github.io/2020/11/16/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/" title="Java 并发 - LockSupport 原理剖析">https://bruceqiu90.github.io/2020/11/16/Java-并发-LockSupport-原理剖析/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+<div>
+  
+    <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+
+  
+</div>
+      <footer class="post-footer">
+          
+          <div class="post-tags">
+              <a href="/tags/Java-%E5%B9%B6%E5%8F%91/" rel="tag"><i class="fa fa-tag"></i> Java 并发</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/10/20/%E5%BD%BB%E5%BA%95%E7%90%86%E8%A7%A3CPU-Cache%E5%92%8C%E7%BC%93%E5%AD%98%E8%A1%8C/" rel="prev" title="彻底理解CPU Cache和缓存行">
+      <i class="fa fa-chevron-left"></i> 彻底理解CPU Cache和缓存行
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#LockSupport-的简单使用"><span class="nav-number">1.</span> <span class="nav-text">LockSupport 的简单使用</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#关于许可"><span class="nav-number">1.1.</span> <span class="nav-text">关于许可</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#和-Semaphore-对比"><span class="nav-number">1.2.</span> <span class="nav-text">和 Semaphore 对比</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#LockSupport-是否会释放锁资源"><span class="nav-number">1.3.</span> <span class="nav-text">LockSupport 是否会释放锁资源</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#中断响应"><span class="nav-number">1.4.</span> <span class="nav-text">中断响应</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#LockSupport-源码分析"><span class="nav-number">2.</span> <span class="nav-text">LockSupport 源码分析</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#LockSupport-中的-Blocker"><span class="nav-number">2.1.</span> <span class="nav-text">LockSupport 中的 Blocker</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#构造函数"><span class="nav-number">2.2.</span> <span class="nav-text">构造函数</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#核心函数分析"><span class="nav-number">2.3.</span> <span class="nav-text">核心函数分析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#底层实现"><span class="nav-number">2.4.</span> <span class="nav-text">底层实现</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Bruce Qiu</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/BruceQiu90" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;BruceQiu90" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:qiuyanjun.90@gmail.com" title="E-Mail → mailto:qiuyanjun.90@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2019 – 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">布鲁斯</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-area"></i>
+    </span>
+      <span class="post-meta-item-text">站点总字数：</span>
+    <span title="站点总字数">52k</span>
+</div>
+<span id="busuanzi_container_site_uv">
+  本站访问次数：<span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+</span>
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/clicklove.js"></script>
