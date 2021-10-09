@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"bruceqiu90.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="ConcurrentHashMap 知识点本篇文章讲解 ConcurrentHashMap 1.8 的知识点 [TOC]">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ConcurrentHashMap 知识点">
+<meta property="og:url" content="https://bruceqiu90.github.io/2021/10/05/ConcurrentHashMap-%E7%9F%A5%E8%AF%86%E7%82%B9/index.html">
+<meta property="og:site_name" content="布鲁斯IO">
+<meta property="og:description" content="ConcurrentHashMap 知识点本篇文章讲解 ConcurrentHashMap 1.8 的知识点 [TOC]">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-10-05T05:48:46.000Z">
+<meta property="article:modified_time" content="2021-10-09T07:16:44.380Z">
+<meta property="article:author" content="Bruce Qiu">
+<meta property="article:tag" content="Java集合">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://bruceqiu90.github.io/2021/10/05/ConcurrentHashMap-%E7%9F%A5%E8%AF%86%E7%82%B9/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>ConcurrentHashMap 知识点 | 布鲁斯IO</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+	<a href="https://your-url" target="_blank" rel="noopener" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#70B7FD; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">布鲁斯IO</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://bruceqiu90.github.io/2021/10/05/ConcurrentHashMap-%E7%9F%A5%E8%AF%86%E7%82%B9/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Bruce Qiu">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="布鲁斯IO">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          ConcurrentHashMap 知识点
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2021-10-05 13:48:46" itemprop="dateCreated datePublished" datetime="2021-10-05T13:48:46+08:00">2021-10-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2021-10-09 15:16:44" itemprop="dateModified" datetime="2021-10-09T15:16:44+08:00">2021-10-09</time>
+              </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span><br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.7k</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="ConcurrentHashMap-知识点"><a href="#ConcurrentHashMap-知识点" class="headerlink" title="ConcurrentHashMap 知识点"></a>ConcurrentHashMap 知识点</h1><p>本篇文章讲解 ConcurrentHashMap 1.8 的知识点</p>
+<p>[TOC]</p>
+<a id="more"></a>
+
+<h2 id="1-7-和-1-8-的区别"><a href="#1-7-和-1-8-的区别" class="headerlink" title="1.7 和 1.8 的区别"></a>1.7 和 1.8 的区别</h2><table>
+<thead>
+<tr>
+<th>不同</th>
+<th>1.7</th>
+<th>1.8</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>数据结构</td>
+<td>数组+链表</td>
+<td>数组+链表+红黑树</td>
+</tr>
+<tr>
+<td>查找效率</td>
+<td>O(n)</td>
+<td>O(log n)</td>
+</tr>
+<tr>
+<td>同步方式</td>
+<td>Segment+HashEntry(ReetrantLock)</td>
+<td>Node+CAS+Synchronized(CAS)</td>
+</tr>
+<tr>
+<td>初始化</td>
+<td>new 对象的时候</td>
+<td>在执行第一次put方法时</td>
+</tr>
+<tr>
+<td>插入元素方式</td>
+<td>头插法</td>
+<td>尾插法</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<h2 id="和-HashMap-的区别"><a href="#和-HashMap-的区别" class="headerlink" title="和 HashMap 的区别"></a>和 HashMap 的区别</h2><table>
+<thead>
+<tr>
+<th>不同</th>
+<th>HashMap</th>
+<th>ConcurrentHashMap</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>线程安全</td>
+<td>不安全</td>
+<td>安全</td>
+</tr>
+<tr>
+<td>key 是否可以为null</td>
+<td>最多允许一个 key 为 null</td>
+<td>不可以</td>
+</tr>
+<tr>
+<td>value 是否可以为 null</td>
+<td>可以</td>
+<td>不可以</td>
+</tr>
+</tbody></table>
+<h2 id="重要成员变量"><a href="#重要成员变量" class="headerlink" title="重要成员变量"></a>重要成员变量</h2><p><strong>table</strong>：默认为null，初始化发生在第一次插入操作，默认大小为16的数组，用来存储Node节点数据，扩容时大小总是2的幂次方。</p>
+<p><strong>nextTable</strong>：默认为null，扩容时新生成的数组，其大小为原数组的两倍。</p>
+<p><strong>sizeCtl</strong> ：默认为0，用来控制table的初始化和扩容操作，具体应用在后续会体现出来。<br>-1 代表table正在初始化<br>-N 表示有N-1个线程正在进行扩容操作<br>其余情况：<br>1、如果table未初始化，表示table需要初始化的大小。<br>2、如果table初始化完成，表示table的容量，默认是table大小的0.75倍，居然用这个公式算0.75（n - (n &gt;&gt;&gt; 2)）。</p>
+<p><strong>Node</strong>：保存key，value及key的hash值的数据结构。<br>其中value和next都用volatile修饰，保证并发的可见性。</p>
+<p><strong>ForwardingNode</strong>：一个特殊的Node节点，hash值为-1，其中存储nextTable的引用。<br>只有table发生扩容的时候，ForwardingNode才会发挥作用，作为一个占位符放在table中表示当前节点为null或则已经被移动。</p>
+<h2 id="初始化"><a href="#初始化" class="headerlink" title="初始化"></a>初始化</h2><p>table的初始化会在第一次put操作的时候执行，且只执行一次。目的，为了防止初始化后的首次操作就需要扩容（putAll），影响效率。</p>
+<h2 id="put操作过程"><a href="#put操作过程" class="headerlink" title="put操作过程"></a>put操作过程</h2><p>put操作采用 CAS+synchronized 实现并发插入或更新操作：</p>
+<ul>
+<li>当前bucket为空时，使用CAS操作，将Node放入对应的bucket中。</li>
+<li>出现hash冲突，则采用synchronized关键字。倘若当前hash对应的节点是链表的头节点，遍历链表，若找到对应的node节点，则修改node节点的val，否则在链表末尾添加node节点；倘若当前节点是红黑树的根节点，在树结构上遍历元素，更新或增加节点。</li>
+<li>倘若当前map正在扩容f.hash == MOVED， 则跟其他线程一起进行扩容</li>
+</ul>
+<h2 id="扩容"><a href="#扩容" class="headerlink" title="扩容"></a>扩容</h2><p><strong>扩容时机</strong></p>
+<ul>
+<li>如果链表的长度大于等于8，并且 数组的长度小于64，则会将数组长度扩大到原来的两倍，并触发transfer，重新调整节点位置。</li>
+<li>新增节点后，addCount统计tab中的节点个数大于阈值（sizeCtl），会触发transfer，重新调整节点位置。</li>
+</ul>
+<p><strong>扩容的过程</strong></p>
+<ul>
+<li>构建一个nextTable，大小为table两倍</li>
+<li>把table的数据复制到nextTable中。<br>在扩容过程中，依然支持并发更新操作；也支持并发插入。</li>
+<li>如果 Node 节点是链表，那么扩容后要么在原位置，要么在原位置+n的位置</li>
+<li>如果是红黑树，那么会构造正序和反序两个链表</li>
+</ul>
+<p><strong>在扩容中如何支持并发的复制和插入</strong></p>
+<ol>
+<li>遍历整个table，当前节点为空，则采用CAS的方式在当前位置放入fwd</li>
+<li>当前节点已经为fwd(with hash field “MOVED”)，则已经有有线程处理完了了，直接跳过 ，这里是控制并发扩容的核心</li>
+</ol>
+<h2 id="get-方法是否需要加锁"><a href="#get-方法是否需要加锁" class="headerlink" title="get 方法是否需要加锁"></a>get 方法是否需要加锁</h2><p>不需要，get方法采用了unsafe方法，来保证线程安全。</p>
+<h2 id="size-方法"><a href="#size-方法" class="headerlink" title="size 方法"></a>size 方法</h2><p>JDK 8 推荐使用mappingCount 方法，因为这个方法的返回值是 long 类型，不会因为 size 方法是 int 类型限制最大值（size 方法是接口定义的，不能修改）。</p>
+<p>在没有并发的情况下，使用一个 baseCount volatile 变量就足够了，当并发的时候，CAS 修改 baseCount 失败后，就会使用 CounterCell 类了，会创建一个这个对象，通常对象的 volatile value 属性是 1。在计算 size 的时候，会将 baseCount 和 CounterCell 数组中的元素的 value 累加，得到总的大小，但这个数字仍旧可能是不准确的。</p>
+<p>还有一个需要注意的地方就是，这个 CounterCell 类使用了 @sun.misc.Contended 注解标识，这个注解是防止伪共享的。是 1.8 新增的。使用时，需要加上 -XX:-RestrictContended 参数。</p>
+<p><strong>什么是缓存失效，伪共享</strong><br>CPU的缓存是以缓存行(cache line)为单位进行缓存的，当多个线程修改不同变量，而这些变量又处于同一个缓存行时，就会引起缓存失效，需要重新从主存读取，影响性能。</p>
+<p>例如：变量1和变量2共享一个缓存行，线程1只读取缓存行中的变量1，线程2修改缓存行中的变量2，虽然线程1和线程2操作的是不同的变量，由于变量1和变量2同处于一个缓存行中，当变量2被修改后，缓存行失效，线程1要重新从主存中读取，因此导致缓存失效，从而产生性能问题。为了更深入一步理解伪共享，我们先看一下CPU缓存。</p>
+<p>怎么解决缓存失效，伪共享问题<br>最简单的方法就是填充，例如下面的VolatileLong， 一个long占8个字节，一个缓存行64字节，Java对象头占8字节（32为操作系统），那么可以填充6个long来占领这个缓存行（6 * 8 = 48 个字节）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">VolatileLong</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">long</span> v;</span><br><span class="line">    <span class="comment">// private long v0, v1, v2, v3, v4, v5  // 去掉注释，开启填充，避免缓存行共享</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是最简单直接的方法，Java 8中引入了一个更加简单的解决方案：@Contended注解。Contended注解可以用于类型上和属性上，加上这个注解之后虚拟机会自动进行填充，从而避免伪共享。</p>
+<h2 id="1-7-和-1-8-统计-size-的区别"><a href="#1-7-和-1-8-统计-size-的区别" class="headerlink" title="1.7 和 1.8 统计 size 的区别"></a>1.7 和 1.8 统计 size 的区别</h2><p><strong>1.7</strong><br>两种方案：<br>1、第一种方案，使用不加锁的模式去尝试多次计算ConcurrentHashMap的size，最多三次，比较前后两次计算的结果，结果一致就认为当前没有元素加入，计算的结果是准确的</p>
+<p>2、第二种方案，如果第一种方案不符合（失败了），他就会给每个Segment加上锁，然后计算ConcurrentHashMap的size返回</p>
+<p><strong>1.8</strong><br>通过累加baseCount和CounterCell数组中的数量，即可得到元素的总个数</p>
+<h2 id="ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？"><a href="#ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？" class="headerlink" title="ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？"></a>ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？</h2><p>弱一致性，hashmap强一直性。</p>
+<p>ConcurrentHashMap可以支持在迭代过程中，向map添加新元素，而HashMap则抛出了ConcurrentModificationException，</p>
+<p>因为HashMap包含一个修改计数器，当你调用他的next()方法来获取下一个元素时，迭代器将会用到这个计数器。</p>
+<h2 id="为什么-value-不允许为-null"><a href="#为什么-value-不允许为-null" class="headerlink" title="为什么 value 不允许为 null"></a>为什么 value 不允许为 null</h2><ol>
+<li>源码设计就是 key 和 value 都不允许为 null，为空会抛出空指针异常</li>
+<li>二义性：<br>假定ConcurrentHashMap也可以存放value为null的值。那不管是HashMap还是ConcurrentHashMap调用map.get(key)的时候，如果返回了null，那么这个null，都有两重含义:</li>
+<li>这个key从来没有在map中映射过。</li>
+<li>这个key的value在设置的时候，就是null。</li>
+</ol>
+<p>基于二义性的定义，使用反证法推出为什么 value 不允许为 null</p>
+<p>假设concurrentHashMap允许存放值为null的value。</p>
+<p>这时有A、B两个线程。</p>
+<p>线程A调用concurrentHashMap.get(key)方法,返回为null，我们还是不知道这个null是没有映射的null还是存的值就是null。</p>
+<p>我们假设此时返回为null的真实情况就是因为这个key没有在map里面映射过。那么我们可以用concurrentHashMap.containsKey(key)来验证我们的假设是否成立，我们期望的结果是返回false。</p>
+<p>但是在我们调用concurrentHashMap.get(key)方法之后，containsKey方法之前，有一个线程B执行了concurrentHashMap.put(key,null)的操作。那么我们调用containsKey方法返回的就是true了。这就与我们的假设的真实情况不符合了。也就是上面说的二义性。</p>
+<h2 id="是否能替代-HashTable"><a href="#是否能替代-HashTable" class="headerlink" title="是否能替代 HashTable"></a>是否能替代 HashTable</h2><p>HashTable 虽然性能上不如 ConcurrentHashMap，但并不能完全被取代，两者的迭代器的一致性不同的，HashTable 的迭代器是强一致性的，而 ConcurrentHashMap 是弱一致的。 ConcurrentHashMap 的 get，clear，iterator 都是弱一致性的。</p>
+<p>向 ConcurrentHashMap 底层数据结构中加入一个元素后，不能立马能对 get 可见。所以 get 方法是弱一致的。</p>
+
+    </div>
+
+    
+    
+    
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>Bruce Qiu
+  </li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://bruceqiu90.github.io/2021/10/05/ConcurrentHashMap-%E7%9F%A5%E8%AF%86%E7%82%B9/" title="ConcurrentHashMap 知识点">https://bruceqiu90.github.io/2021/10/05/ConcurrentHashMap-知识点/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！
+  </li>
+</ul>
+</div>
+
+<div>
+  
+    <div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+
+  
+</div>
+      <footer class="post-footer">
+          
+          <div class="post-tags">
+              <a href="/tags/Java%E9%9B%86%E5%90%88/" rel="tag"><i class="fa fa-tag"></i> Java集合</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2020/11/16/Java-%E5%B9%B6%E5%8F%91-LockSupport-%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/" rel="prev" title="Java 并发 - LockSupport 原理剖析">
+      <i class="fa fa-chevron-left"></i> Java 并发 - LockSupport 原理剖析
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#ConcurrentHashMap-知识点"><span class="nav-number">1.</span> <span class="nav-text">ConcurrentHashMap 知识点</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-7-和-1-8-的区别"><span class="nav-number">1.1.</span> <span class="nav-text">1.7 和 1.8 的区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#和-HashMap-的区别"><span class="nav-number">1.2.</span> <span class="nav-text">和 HashMap 的区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#重要成员变量"><span class="nav-number">1.3.</span> <span class="nav-text">重要成员变量</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#初始化"><span class="nav-number">1.4.</span> <span class="nav-text">初始化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#put操作过程"><span class="nav-number">1.5.</span> <span class="nav-text">put操作过程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#扩容"><span class="nav-number">1.6.</span> <span class="nav-text">扩容</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#get-方法是否需要加锁"><span class="nav-number">1.7.</span> <span class="nav-text">get 方法是否需要加锁</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#size-方法"><span class="nav-number">1.8.</span> <span class="nav-text">size 方法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-7-和-1-8-统计-size-的区别"><span class="nav-number">1.9.</span> <span class="nav-text">1.7 和 1.8 统计 size 的区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？"><span class="nav-number">1.10.</span> <span class="nav-text">ConcurrentHashMap迭代器是强一致性还是弱一致性？HashMap呢？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#为什么-value-不允许为-null"><span class="nav-number">1.11.</span> <span class="nav-text">为什么 value 不允许为 null</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#是否能替代-HashTable"><span class="nav-number">1.12.</span> <span class="nav-text">是否能替代 HashTable</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Bruce Qiu</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">10</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/BruceQiu90" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;BruceQiu90" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:qiuyanjun.90@gmail.com" title="E-Mail → mailto:qiuyanjun.90@gmail.com" rel="noopener" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 2019 – 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">布鲁斯</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-area"></i>
+    </span>
+      <span class="post-meta-item-text">站点总字数：</span>
+    <span title="站点总字数">56k</span>
+</div>
+<span id="busuanzi_container_site_uv">
+  本站访问次数：<span class="busuanzi-value" id="busuanzi_value_site_pv"></span>
+</span>
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/clicklove.js"></script>
